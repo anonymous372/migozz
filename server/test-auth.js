@@ -86,3 +86,4 @@ const testAuth = async () => {
 
 // Run the test
 testAuth();
+

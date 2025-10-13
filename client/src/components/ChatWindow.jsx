@@ -156,36 +156,36 @@ const ChatWindow = ({ friend, onClose }) => {
 
   // Helper function to check if message is from current user
   const isCurrentUserMessage = (message) => {
-    const currentUserId = user._id || user.id;
-    const currentUsername = user.username;
+    const currentUserId = user.id || user._id; // Auth context uses 'id', not '_id'
 
-    // Multiple ways to identify current user's messages
-    const isFromCurrentUser =
-      // Temp message flag
-      message.isTemp === true ||
-      // Direct ID comparison
-      message.sender === currentUserId ||
-      message.sender === currentUserId?.toString() ||
-      // String comparison
-      message.sender === "me" ||
-      // Username comparison
-      message.senderInfo?.username === "You" ||
-      message.senderInfo?.username === currentUsername ||
-      // Check if sender info matches current user
-      (message.senderInfo && message.senderInfo.username === currentUsername);
-
-    // Debug logging
-    console.log("isCurrentUserMessage debug:", {
+    // Debug logging to understand message structure
+    console.log("Message debug:", {
       messageSender: message.sender,
-      messageSenderInfo: message.senderInfo,
+      messageSenderType: typeof message.sender,
       currentUserId,
-      currentUsername,
+      currentUserObject: user,
       isTemp: message.isTemp,
-      isFromCurrentUser,
-      userObject: user,
     });
 
-    return isFromCurrentUser;
+    // Handle different message sender formats:
+    // 1. Temp messages (from optimistic updates)
+    if (message.isTemp === true) {
+      return true;
+    }
+
+    // 2. Messages with populated sender object (from server)
+    if (message.sender && typeof message.sender === "object") {
+      return (
+        message.sender._id === currentUserId ||
+        message.sender.id === currentUserId
+      );
+    }
+
+    // 3. Messages with sender as string ID (direct comparison)
+    return (
+      message.sender === currentUserId ||
+      message.sender === currentUserId?.toString()
+    );
   };
 
   if (loading) {
@@ -224,10 +224,6 @@ const ChatWindow = ({ friend, onClose }) => {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {friend.isOnline ? "Online" : "Offline"}
             </p>
-            {/* Debug info */}
-            <p className="text-xs text-gray-400">
-              Debug: User ID: {user._id || user.id} | Username: {user.username}
-            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -255,16 +251,6 @@ const ChatWindow = ({ friend, onClose }) => {
               new Date(message.timestamp) - new Date(prevMessage.timestamp) >
                 300000; // 5 minutes
 
-            // Debug logging
-            console.log("Message debug:", {
-              index,
-              messageSender: message.sender,
-              messageSenderInfo: message.senderInfo,
-              isCurrentUser,
-              showSenderName,
-              friendUsername: friend.username,
-            });
-
             return (
               <div
                 key={message._id}
@@ -273,18 +259,20 @@ const ChatWindow = ({ friend, onClose }) => {
                 }`}
               >
                 <div className="flex flex-col max-w-xs lg:max-w-md">
-                  {/* Sender name - always show for now to debug */}
-                  <div
-                    className={`text-xs mb-1 ${
-                      isCurrentUser
-                        ? "text-right text-blue-600 dark:text-blue-400"
-                        : "text-left text-gray-600 dark:text-gray-400"
-                    }`}
-                  >
-                    {isCurrentUser
-                      ? "You"
-                      : message.senderInfo?.username || friend.username}
-                  </div>
+                  {/* Sender name - only show when needed */}
+                  {showSenderName && (
+                    <div
+                      className={`text-xs mb-1 ${
+                        isCurrentUser
+                          ? "text-right text-blue-600 dark:text-blue-400"
+                          : "text-left text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {isCurrentUser
+                        ? "You"
+                        : message.senderInfo?.username || friend.username}
+                    </div>
+                  )}
 
                   {/* Message bubble */}
                   <div

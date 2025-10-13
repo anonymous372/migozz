@@ -76,3 +76,4 @@ Run the test script to verify all endpoints:
 ```bash
 node test-auth.js
 ```
+
