@@ -1,27 +1,31 @@
 /**
  * @fileoverview Controller functions for authentication (login and registration).
- * FIX: JWT_SECRET is now read directly from process.env, ensuring it is defined
- * after the dotenv configuration runs in app.js.
+ * FIX: JWT_SECRET is now read directly from process.env *inside the function*
+ * that uses it, avoiding the ES module load timing conflict.
  */
 
-// We assume API_RESPONSE is defined and exported from this constants file,
-// but we remove the JWT_SECRET import here.
+// Now only importing the static API_RESPONSE function
 import { API_RESPONSE } from "../utils/constants.js";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 
 // --- Configuration ---
-// Read the secret directly from process.env, loaded by dotenv in app.js
-const JWT_SECRET = process.env.JWT_SECRET;
-
-// CRITICAL CHECK: Ensure the secret is loaded
-if (!JWT_SECRET) {
-  console.error("FATAL ERROR: JWT_SECRET is not defined. Cannot sign tokens.");
-  // In a production app, you might crash the process here: process.exit(1);
-}
+// Removed module-level JWT_SECRET read to avoid ES module timing conflict.
+// It will now be read inside createToken().
 
 const createToken = (userId) => {
-  return jwt.sign({ id: userId }, JWT_SECRET, {
+  const secret = process.env.JWT_SECRET;
+
+  // Re-add the critical check here, which only runs if a token is attempted to be created
+  if (!secret) {
+    console.error(
+      "FATAL ERROR: JWT_SECRET is missing. Check .env configuration."
+    );
+    // Throw an error to halt the API call and provide a 500 response
+    throw new Error("JWT_SECRET is undefined.");
+  }
+
+  return jwt.sign({ id: userId }, secret, {
     expiresIn: "7d",
   });
 };
@@ -61,6 +65,21 @@ export const register = async (req, res) => {
       );
   } catch (error) {
     console.error("Registration error:", error);
+
+    // Check for the specific error thrown by createToken if the secret was missing
+    if (error.message === "JWT_SECRET is undefined.") {
+      return res
+        .status(500)
+        .json(
+          API_RESPONSE(
+            500,
+            null,
+            "Configuration Error",
+            "Server failed to initialize authentication due to missing secret key."
+          )
+        );
+    }
+
     if (error.code === 11000) {
       return res
         .status(400)
@@ -134,6 +153,21 @@ export const login = async (req, res) => {
       .json(API_RESPONSE(200, { token }, null, "Login successful."));
   } catch (error) {
     console.error("Login error:", error);
+
+    // Check for the specific error thrown by createToken if the secret was missing
+    if (error.message === "JWT_SECRET is undefined.") {
+      return res
+        .status(500)
+        .json(
+          API_RESPONSE(
+            500,
+            null,
+            "Configuration Error",
+            "Server failed to initialize authentication due to missing secret key."
+          )
+        );
+    }
+
     res
       .status(500)
       .json(
