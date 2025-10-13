@@ -1,6 +1,9 @@
 import express from "express";
 import { register, login } from "../controllers/authController.js";
 import { authenticateToken } from "../middlewares/authMiddleware.js";
+import friendRoutes from "./friends.js";
+import messageRoutes from "./messages.js";
+import userRoutes from "./users.js";
 
 const router = express.Router();
 
@@ -23,5 +26,10 @@ router.get("/profile", authenticateToken, (req, res) => {
     message: "Profile retrieved successfully",
   });
 });
+
+// API routes
+router.use("/friends", friendRoutes);
+router.use("/messages", messageRoutes);
+router.use("/users", userRoutes);
 
 export default router;

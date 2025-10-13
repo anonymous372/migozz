@@ -7,12 +7,31 @@ const MONGO_URI = process.env.MONGO_URI;
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
+import { createServer } from "http";
+import { Server } from "socket.io";
 // Assuming these imports are necessary and paths are correct
 import { outGreen, outYellow } from "./src/utils/helpers.js";
 import router from "./src/routes/index.js";
+import { socketAuth, handleConnection } from "./src/services/socketService.js";
 
 // Initialize the Express application
 const app = express();
+const server = createServer(app);
+
+// Initialize Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+// Socket.io authentication
+io.use(socketAuth);
+
+// Handle socket connections
+io.on("connection", handleConnection(io));
 
 const connectDB = async () => {
   // CRITICAL CHECK: Check here instead of relying on a separate file import
@@ -56,8 +75,9 @@ app.use("/api/v1", router);
 
 // Connect to database and start server
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`Server started on port ${PORT}`);
     console.log(`API available at http://localhost:${PORT}/api/v1`);
+    console.log(`Socket.io server running on port ${PORT}`);
   });
 });

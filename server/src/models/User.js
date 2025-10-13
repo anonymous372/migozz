@@ -28,6 +28,20 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: "https://placehold.co/100x100/3B82F6/FFFFFF?text=U",
     },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
+    lastSeen: {
+      type: Date,
+      default: Date.now,
+    },
+    friends: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   {
     timestamps: true,
