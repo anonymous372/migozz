@@ -4,6 +4,9 @@ client/dist
 client/dist-ssr
 client/*.local
 
+# server
+server/node_modules
+server/.env
 
 # Editor directories and files
 .vscode/*
