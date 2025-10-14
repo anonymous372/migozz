@@ -105,6 +105,25 @@ class SocketService {
     }
   }
 
+  // Read status events
+  markMessagesAsRead(senderId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("messages_read", { senderId });
+    }
+  }
+
+  onMessagesRead(callback) {
+    if (this.socket) {
+      this.socket.on("messages_read", callback);
+    }
+  }
+
+  onMessagesReadBy(callback) {
+    if (this.socket) {
+      this.socket.on("messages_read_by", callback);
+    }
+  }
+
   // Online status events
   onUserOnline(callback) {
     if (this.socket) {

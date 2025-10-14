@@ -4,7 +4,7 @@ import apiService from "../services/api";
 import socketService from "../services/socket";
 import { useAuth } from "../context/AuthContext";
 
-const ChatWindow = ({ friend, onClose }) => {
+const ChatWindow = ({ friend, onClose, onUnreadUpdate }) => {
   const { user } = useAuth();
 
   const [messages, setMessages] = useState([]);
@@ -13,15 +13,30 @@ const ChatWindow = ({ friend, onClose }) => {
   const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const readTimeoutRef = useRef(null);
 
   useEffect(() => {
     const loadMessages = async () => {
       try {
         const response = await apiService.getMessages(friend._id);
         if (response.status === 200) {
-          setMessages(response.data.messages);
+          const messages = response.data.messages;
+          setMessages(messages);
+
+          // Calculate unread count (messages from friend that are not read)
+          const unread = messages.filter((msg) => {
+            const isFromFriend = !isCurrentUserMessage(msg);
+            return isFromFriend && !msg.isRead;
+          }).length;
+
+          setUnreadCount(unread);
+          // Notify parent component of unread count
+          if (onUnreadUpdate) {
+            onUnreadUpdate(friend._id, unread);
+          }
         }
       } catch (error) {
         console.error("Error loading messages:", error);
@@ -32,6 +47,42 @@ const ChatWindow = ({ friend, onClose }) => {
 
     loadMessages();
 
+    // Debounced function to mark messages as read
+    const debouncedMarkAsRead = () => {
+      // Clear existing timeout
+      if (readTimeoutRef.current) {
+        clearTimeout(readTimeoutRef.current);
+      }
+
+      // Set new timeout to mark as read after a short delay
+      readTimeoutRef.current = setTimeout(async () => {
+        try {
+          await apiService.markMessagesAsRead(friend._id);
+          // Update local messages to mark them as read
+          setMessages((prev) =>
+            prev.map((msg) => {
+              const isFromFriendMsg = !isCurrentUserMessage(msg);
+              if (isFromFriendMsg && !msg.isRead) {
+                return { ...msg, isRead: true, readAt: new Date() };
+              }
+              return msg;
+            })
+          );
+
+          // Notify the friend that their messages have been read
+          socketService.markMessagesAsRead(friend._id);
+
+          // Reset unread count and notify parent
+          setUnreadCount(0);
+          if (onUnreadUpdate) {
+            onUnreadUpdate(friend._id, 0);
+          }
+        } catch (error) {
+          console.error("Error auto-marking messages as read:", error);
+        }
+      }, 500); // 500ms delay to allow for multiple rapid messages
+    };
+
     // Set up socket listeners for this chat
     const handleNewMessage = (message) => {
       const currentUserId = user._id || user.id;
@@ -40,7 +91,28 @@ const ChatWindow = ({ friend, onClose }) => {
         (message.sender === friend._id || message.receiver === friend._id) &&
         message.sender !== currentUserId
       ) {
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => {
+          const newMessages = [...prev, message];
+          return newMessages;
+        });
+
+        // If message is from friend and not read, increment unread count and schedule read
+        const isFromFriend =
+          message.sender === friend._id ||
+          (typeof message.sender === "object" &&
+            message.sender._id === friend._id);
+        if (isFromFriend && !message.isRead) {
+          setUnreadCount((prev) => {
+            const newCount = prev + 1;
+            if (onUnreadUpdate) {
+              onUnreadUpdate(friend._id, newCount);
+            }
+            return newCount;
+          });
+
+          // Schedule automatic read marking since chat window is open and active
+          debouncedMarkAsRead();
+        }
       }
     };
 
@@ -61,10 +133,59 @@ const ChatWindow = ({ friend, onClose }) => {
     socketService.onUserTyping(handleUserTyping);
     socketService.onUserStopTyping(handleUserStopTyping);
 
-    // Mark messages as read
-    apiService.markMessagesAsRead(friend._id);
+    // Handle real-time read status updates
+    const handleMessagesReadBy = (data) => {
+      // Only update if the reader is the current friend
+      if (data.readerId === friend._id) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            const isFromCurrentUser = isCurrentUserMessage(msg);
+            // Update read status for messages sent by current user
+            if (isFromCurrentUser && !msg.isRead) {
+              return { ...msg, isRead: true, readAt: data.timestamp };
+            }
+            return msg;
+          })
+        );
+      }
+    };
+
+    socketService.onMessagesReadBy(handleMessagesReadBy);
+
+    // Mark messages as read when chat is opened
+    const markMessagesAsRead = async () => {
+      try {
+        await apiService.markMessagesAsRead(friend._id);
+        // Update local messages to mark them as read
+        setMessages((prev) =>
+          prev.map((msg) => {
+            const isFromFriend = !isCurrentUserMessage(msg);
+            if (isFromFriend && !msg.isRead) {
+              return { ...msg, isRead: true, readAt: new Date() };
+            }
+            return msg;
+          })
+        );
+
+        // Notify the friend that their messages have been read
+        socketService.markMessagesAsRead(friend._id);
+
+        // Reset unread count and notify parent
+        setUnreadCount(0);
+        if (onUnreadUpdate) {
+          onUnreadUpdate(friend._id, 0);
+        }
+      } catch (error) {
+        console.error("Error marking messages as read:", error);
+      }
+    };
+
+    // Mark messages as read after a short delay to ensure UI is ready
+    const readTimer = setTimeout(markMessagesAsRead, 1000);
 
     return () => {
+      clearTimeout(readTimer);
+      clearTimeout(readTimeoutRef.current);
       socketService.removeAllListeners();
     };
   }, [friend._id]);
@@ -72,6 +193,44 @@ const ChatWindow = ({ friend, onClose }) => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Mark messages as read when user focuses on the chat window
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // User returned to the tab/window, mark messages as read
+        setTimeout(async () => {
+          try {
+            await apiService.markMessagesAsRead(friend._id);
+            setMessages((prev) =>
+              prev.map((msg) => {
+                const isFromFriendMsg = !isCurrentUserMessage(msg);
+                if (isFromFriendMsg && !msg.isRead) {
+                  return { ...msg, isRead: true, readAt: new Date() };
+                }
+                return msg;
+              })
+            );
+            socketService.markMessagesAsRead(friend._id);
+            setUnreadCount(0);
+            if (onUnreadUpdate) {
+              onUnreadUpdate(friend._id, 0);
+            }
+          } catch (error) {
+            console.error(
+              "Error marking messages as read on visibility change:",
+              error
+            );
+          }
+        }, 500);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [friend._id]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -100,6 +259,7 @@ const ChatWindow = ({ friend, onClose }) => {
         },
         // Add a flag to identify this as a temp message
         isTemp: true,
+        isRead: false, // New messages start as unread
       };
 
       setMessages((prev) => [...prev, tempMessage]);
@@ -157,15 +317,6 @@ const ChatWindow = ({ friend, onClose }) => {
   // Helper function to check if message is from current user
   const isCurrentUserMessage = (message) => {
     const currentUserId = user.id || user._id; // Auth context uses 'id', not '_id'
-
-    // Debug logging to understand message structure
-    console.log("Message debug:", {
-      messageSender: message.sender,
-      messageSenderType: typeof message.sender,
-      currentUserId,
-      currentUserObject: user,
-      isTemp: message.isTemp,
-    });
 
     // Handle different message sender formats:
     // 1. Temp messages (from optimistic updates)
@@ -283,15 +434,84 @@ const ChatWindow = ({ friend, onClose }) => {
                     }`}
                   >
                     <p className="text-sm">{message.content}</p>
-                    <p
-                      className={`text-xs mt-1 ${
-                        isCurrentUser
-                          ? "text-blue-100"
-                          : "text-gray-500 dark:text-gray-400"
-                      }`}
-                    >
-                      {formatTime(message.timestamp)}
-                    </p>
+                    <div className="flex items-center justify-end mt-1">
+                      <p
+                        className={`text-[10px] ${
+                          isCurrentUser
+                            ? "text-blue-100"
+                            : "text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
+                        {formatTime(message.timestamp)}
+                      </p>
+                      {/* Read/Unread status for current user's messages */}
+                      {isCurrentUser && (
+                        <div className="flex items-center ml-2">
+                          {message.isRead ? (
+                            <div className="relative w-5 h-4">
+                              {/* First checkmark */}
+                              <svg
+                                className="absolute w-4 h-4 text-blue-200"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                                style={{
+                                  strokeWidth: "2px",
+                                  stroke: "currentColor",
+                                  fill: "none",
+                                }}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M5 10l3 3 7-7"
+                                  strokeWidth="2"
+                                />
+                              </svg>
+                              {/* Second overlapping checkmark */}
+                              <svg
+                                className="absolute w-4 h-4 text-blue-200"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                                style={{
+                                  left: "4px",
+                                  top: "0px",
+                                  strokeWidth: "2px",
+                                  stroke: "currentColor",
+                                  fill: "none",
+                                }}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M5 10l3 3 7-7"
+                                  strokeWidth="2.5"
+                                />
+                              </svg>
+                            </div>
+                          ) : (
+                            <div className="flex items-center">
+                              <svg
+                                className="w-4 h-4 text-blue-200"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                                style={{
+                                  strokeWidth: "2px",
+                                  stroke: "currentColor",
+                                  fill: "none",
+                                }}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M5 10l3 3 7-7"
+                                  strokeWidth="2"
+                                />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -80,7 +80,7 @@ const LandingPage = () => {
         </p>
         <div className="flex flex-col sm:flex-row gap-4 mt-10 animate-fade-in-up delay-200">
           <Link
-            to="/app"
+            to="/home"
             className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 flex items-center gap-2"
           >
             Get Started <Users className="w-5 h-5" />

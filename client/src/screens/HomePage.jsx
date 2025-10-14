@@ -15,6 +15,7 @@ const HomePage = () => {
   const [friendRequests, setFriendRequests] = useState([]);
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   useEffect(() => {
     const initializeData = async () => {
@@ -111,6 +112,13 @@ const HomePage = () => {
     setSelectedFriend(friend);
   };
 
+  const handleUnreadUpdate = (friendId, count) => {
+    setUnreadCounts((prev) => ({
+      ...prev,
+      [friendId]: count,
+    }));
+  };
+
   const handleLogout = () => {
     apiService.updateOnlineStatus(false);
     socketService.disconnect();
@@ -177,6 +185,7 @@ const HomePage = () => {
             onlineFriends={onlineFriends}
             onFriendSelect={handleFriendSelect}
             selectedFriend={selectedFriend}
+            unreadCounts={unreadCounts}
           />
         </div>
       </div>
@@ -187,6 +196,7 @@ const HomePage = () => {
           <ChatWindow
             friend={selectedFriend}
             onClose={() => setSelectedFriend(null)}
+            onUnreadUpdate={handleUnreadUpdate}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">

@@ -148,6 +148,25 @@ export const handleConnection = (io) => {
       }
     });
 
+    // Handle read status updates
+    socket.on("messages_read", async (data) => {
+      try {
+        const { senderId } = data;
+
+        // Notify the sender that their messages have been read
+        const senderConnection = connectedUsers.get(senderId);
+        if (senderConnection) {
+          io.to(senderConnection.socketId).emit("messages_read_by", {
+            readerId: socket.userId,
+            readerUsername: socket.user.username,
+            timestamp: new Date(),
+          });
+        }
+      } catch (error) {
+        console.error("Read status update error:", error);
+      }
+    });
+
     // Handle disconnection
     socket.on("disconnect", async () => {
       console.log(`User ${socket.user.username} disconnected`);
