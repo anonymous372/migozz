@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Send, ArrowLeft, Phone, Video, MoreVertical } from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
@@ -22,6 +22,14 @@ const ChatWindow = ({
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const readTimeoutRef = useRef(null);
+
+  // Clear UI synchronously before paint when switching chats to avoid flashing old messages
+  useLayoutEffect(() => {
+    setLoading(true);
+    setMessages([]);
+    setUnreadCount(0);
+    setIsTyping(false);
+  }, [friend._id]);
 
   useEffect(() => {
     const loadMessages = async () => {
@@ -344,23 +352,14 @@ const ChatWindow = ({
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Loading messages...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // NOTE: don't early-return on loading — keep header and input visible
+  // and show a loading UI inside the messages area so the whole chat window
+  // (header + messages + input) fits within the 100vh.
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Fixed Chat Header */}
-      <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
+      <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
@@ -396,8 +395,17 @@ const ChatWindow = ({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
-        {messages.length > 0 ? (
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 chat-scrollbar">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600 dark:text-gray-400">
+                Loading messages...
+              </p>
+            </div>
+          </div>
+        ) : messages.length > 0 ? (
           messages.map((message, index) => {
             const isCurrentUser = isCurrentUserMessage(message);
             const prevMessage = index > 0 ? messages[index - 1] : null;
@@ -548,13 +556,13 @@ const ChatWindow = ({
             type="text"
             value={newMessage}
             onChange={handleTyping}
-            placeholder="Type a message..."
+            placeholder={loading ? "Loading messages..." : "Type a message..."}
             className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={sending}
+            disabled={sending || loading}
           />
           <button
             type="submit"
-            disabled={!newMessage.trim() || sending}
+            disabled={!newMessage.trim() || sending || loading}
             className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="w-5 h-5" />

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Search, UserPlus, MoreVertical } from "lucide-react";
+import { useState } from "react";
+import { Search, MoreVertical } from "lucide-react";
 import apiService from "../services/api";
 
 const FriendsList = ({
@@ -11,7 +11,6 @@ const FriendsList = ({
   collapsed = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [showAddFriend, setShowAddFriend] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
 
@@ -119,17 +118,6 @@ const FriendsList = ({
             className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-      </div>
-
-      {/* Add Friend Button */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <button
-          onClick={() => setShowAddFriend(!showAddFriend)}
-          className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <UserPlus className="w-5 h-5 text-blue-600" />
-          <span className="text-blue-600 font-medium">Add Friend</span>
-        </button>
       </div>
 
       {/* Search Results */}

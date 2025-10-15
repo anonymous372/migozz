@@ -3,7 +3,17 @@ import { useAuth } from "../context/AuthContext";
 import FriendsList from "../components/FriendsList";
 import ChatWindow from "../components/ChatWindow";
 import FriendRequests from "../components/FriendRequests";
-import { Users, MessageCircle, UserPlus, LogOut, Menu, X } from "lucide-react";
+import {
+  Users,
+  MessageCircle,
+  UserPlus,
+  LogOut,
+  Menu,
+  X,
+  UserCheck,
+} from "lucide-react";
+import Tooltip from "../components/Tooltip";
+import AddFriendModal from "../components/AddFriendModal";
 import apiService from "../services/api";
 import socketService from "../services/socket";
 
@@ -14,6 +24,7 @@ const HomePage = () => {
   const [onlineFriends, setOnlineFriends] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
   const [showFriendRequests, setShowFriendRequests] = useState(false);
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unreadCounts, setUnreadCounts] = useState({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -132,7 +143,7 @@ const HomePage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -142,35 +153,50 @@ const HomePage = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-900 overflow-hidden">
+    <div className="flex flex-1 min-h-0 h-full bg-gray-100 dark:bg-gray-900 overflow-hidden">
       {/* Left Sidebar - Friends List */}
       <div
         className={`${
           sidebarCollapsed ? "w-16" : "w-80"
-        } bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out relative`}
+        } bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out relative h-full`}
       >
         {/* Header */}
-        <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+        <div className="h-16 px-4 flex items-center justify-between flex-shrink-0 bg-white dark:bg-transparent">
           <div className="flex items-center gap-3">
             {!sidebarCollapsed && (
               <h1 className="text-xl font-bold text-gray-900 dark:text-white transition-opacity duration-300">
-                Migozz
+                Chats
               </h1>
             )}
           </div>
           <div className="flex items-center gap-2">
             {!sidebarCollapsed && (
-              <button
-                onClick={() => setShowFriendRequests(!showFriendRequests)}
-                className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
-              >
-                <UserPlus className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                {friendRequests.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {friendRequests.length}
-                  </span>
-                )}
-              </button>
+              <>
+                <Tooltip label="Add friend">
+                  <button
+                    onClick={() => setShowAddFriendModal(true)}
+                    className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
+                    aria-label="Add Friend"
+                  >
+                    <UserPlus className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                  </button>
+                </Tooltip>
+
+                <Tooltip label="Friend requests">
+                  <button
+                    onClick={() => setShowFriendRequests(!showFriendRequests)}
+                    className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
+                    aria-label="Friend Requests"
+                  >
+                    <UserCheck className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    {friendRequests.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {friendRequests.length}
+                      </span>
+                    )}
+                  </button>
+                </Tooltip>
+              </>
             )}
 
             {/* Sidebar Toggle Button */}
@@ -199,7 +225,7 @@ const HomePage = () => {
         )}
 
         {/* Friends List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <FriendsList
             friends={friends}
             onlineFriends={onlineFriends}
@@ -211,7 +237,7 @@ const HomePage = () => {
         </div>
 
         {/* Logout Button at Bottom */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="p-4 flex-shrink-0">
           <button
             onClick={handleLogout}
             className={`w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
@@ -230,7 +256,7 @@ const HomePage = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {selectedFriend ? (
           <ChatWindow
             friend={selectedFriend}
@@ -252,6 +278,11 @@ const HomePage = () => {
           </div>
         )}
       </div>
+      {/* Add Friend Modal */}
+      <AddFriendModal
+        open={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
+      />
     </div>
   );
 };
