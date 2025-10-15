@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import FriendsList from "../components/FriendsList";
 import ChatWindow from "../components/ChatWindow";
 import FriendRequests from "../components/FriendRequests";
-import { Users, MessageCircle, UserPlus, LogOut } from "lucide-react";
+import { Users, MessageCircle, UserPlus, LogOut, Menu, X } from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
 
@@ -16,6 +16,7 @@ const HomePage = () => {
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const initializeData = async () => {
@@ -119,6 +120,10 @@ const HomePage = () => {
     }));
   };
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
   const handleLogout = () => {
     apiService.updateOnlineStatus(false);
     socketService.disconnect();
@@ -137,16 +142,24 @@ const HomePage = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900 overflow-hidden">
       {/* Left Sidebar - Friends List */}
-      <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      <div
+        className={`${
+          sidebarCollapsed ? "w-16" : "w-80"
+        } bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out relative`}
+      >
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              Migozz
-            </h1>
-            <div className="flex items-center gap-2">
+        <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            {!sidebarCollapsed && (
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white transition-opacity duration-300">
+                Migozz
+              </h1>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {!sidebarCollapsed && (
               <button
                 onClick={() => setShowFriendRequests(!showFriendRequests)}
                 className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
@@ -158,18 +171,25 @@ const HomePage = () => {
                   </span>
                 )}
               </button>
-              <button
-                onClick={handleLogout}
-                className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              >
-                <LogOut className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-            </div>
+            )}
+
+            {/* Sidebar Toggle Button */}
+            <button
+              onClick={toggleSidebar}
+              className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? (
+                <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              ) : (
+                <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              )}
+            </button>
           </div>
         </div>
 
         {/* Friend Requests Panel */}
-        {showFriendRequests && (
+        {showFriendRequests && !sidebarCollapsed && (
           <div className="border-b border-gray-200 dark:border-gray-700">
             <FriendRequests
               friendRequests={friendRequests}
@@ -186,17 +206,37 @@ const HomePage = () => {
             onFriendSelect={handleFriendSelect}
             selectedFriend={selectedFriend}
             unreadCounts={unreadCounts}
+            collapsed={sidebarCollapsed}
           />
+        </div>
+
+        {/* Logout Button at Bottom */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <button
+            onClick={handleLogout}
+            className={`w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
+              sidebarCollapsed ? "justify-center" : "justify-start"
+            }`}
+            title="Logout"
+          >
+            <LogOut className="w-5 h-5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+            {!sidebarCollapsed && (
+              <span className="text-gray-600 dark:text-gray-400 font-medium">
+                Logout
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {selectedFriend ? (
           <ChatWindow
             friend={selectedFriend}
             onClose={() => setSelectedFriend(null)}
             onUnreadUpdate={handleUnreadUpdate}
+            sidebarCollapsed={sidebarCollapsed}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">

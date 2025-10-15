@@ -4,7 +4,12 @@ import apiService from "../services/api";
 import socketService from "../services/socket";
 import { useAuth } from "../context/AuthContext";
 
-const ChatWindow = ({ friend, onClose, onUnreadUpdate }) => {
+const ChatWindow = ({
+  friend,
+  onClose,
+  onUnreadUpdate,
+  sidebarCollapsed = false,
+}) => {
   const { user } = useAuth();
 
   const [messages, setMessages] = useState([]);
@@ -354,8 +359,8 @@ const ChatWindow = ({ friend, onClose, onUnreadUpdate }) => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Chat Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      {/* Fixed Chat Header */}
+      <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
@@ -391,7 +396,7 @@ const ChatWindow = ({ friend, onClose, onUnreadUpdate }) => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
         {messages.length > 0 ? (
           messages.map((message, index) => {
             const isCurrentUser = isCurrentUserMessage(message);
@@ -537,7 +542,7 @@ const ChatWindow = ({ friend, onClose, onUnreadUpdate }) => {
       </div>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
         <form onSubmit={handleSendMessage} className="flex items-center gap-3">
           <input
             type="text"

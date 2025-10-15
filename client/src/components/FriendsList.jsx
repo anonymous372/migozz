@@ -8,6 +8,7 @@ const FriendsList = ({
   onFriendSelect,
   selectedFriend,
   unreadCounts,
+  collapsed = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -56,6 +57,50 @@ const FriendsList = ({
   const isOnline = (friendId) => {
     return onlineFriends.some((friend) => friend._id === friendId);
   };
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col h-full">
+        {/* Collapsed Friends List */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
+          <div className="p-2">
+            <div className="space-y-2">
+              {friends.slice(0, 6).map((friend) => (
+                <div
+                  key={friend._id}
+                  onClick={() => onFriendSelect(friend)}
+                  className={`relative w-12 h-12 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 ${
+                    selectedFriend?._id === friend._id
+                      ? "ring-2 ring-blue-500"
+                      : "hover:bg-gray-400 dark:hover:bg-gray-500"
+                  }`}
+                  title={friend.username}
+                >
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {friend.username.charAt(0).toUpperCase()}
+                  </span>
+
+                  {/* Online indicator */}
+                  {isOnline(friend._id) && (
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
+                  )}
+
+                  {/* Unread count indicator */}
+                  {unreadCounts[friend._id] > 0 && (
+                    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium min-w-[20px]">
+                      {unreadCounts[friend._id] > 9
+                        ? "9+"
+                        : unreadCounts[friend._id]}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -137,7 +182,7 @@ const FriendsList = ({
       )}
 
       {/* Friends List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
         <div className="p-4">
           <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
             Friends ({friends.length})
