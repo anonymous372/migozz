@@ -18,8 +18,10 @@ const ChatWindow = ({
   const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [typingVisible, setTypingVisible] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const readTimeoutRef = useRef(null);
 
@@ -131,20 +133,38 @@ const ChatWindow = ({
 
     const handleUserTyping = (data) => {
       if (data.userId === friend._id) {
+        // Show typing indicator
         setIsTyping(true);
-        setTimeout(() => setIsTyping(false), 3000);
+        setTypingVisible(true); // immediately show (for fade-in)
+
+        // Clear any existing hide timeout
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+        // Hide typing after a short idle period; keep indicator visible for a smooth fade-out
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+          // Delay hiding the element slightly to allow CSS fade-out
+          setTimeout(() => setTypingVisible(false), 220);
+        }, 3000);
       }
     };
 
     const handleUserStopTyping = (data) => {
       if (data.userId === friend._id) {
         setIsTyping(false);
+        // give a small delay before hiding to allow a smooth fade
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        setTimeout(() => setTypingVisible(false), 220);
       }
     };
 
+    // Register listeners and keep references so we can remove only these on cleanup
     socketService.onNewMessage(handleNewMessage);
     socketService.onUserTyping(handleUserTyping);
     socketService.onUserStopTyping(handleUserStopTyping);
+
+    // Save listener references on the socket service so we can remove them later
+    // (socket.io-client uses the same callback reference for off)
 
     // Handle real-time read status updates
     const handleMessagesReadBy = (data) => {
@@ -199,13 +219,28 @@ const ChatWindow = ({
     return () => {
       clearTimeout(readTimer);
       clearTimeout(readTimeoutRef.current);
-      socketService.removeAllListeners();
+      // Remove only the listeners we added for this chat
+      socketService.off("new_message", handleNewMessage);
+      socketService.off("user_typing", handleUserTyping);
+      socketService.off("user_stop_typing", handleUserStopTyping);
+      socketService.off("messages_read_by", handleMessagesReadBy);
     };
   }, [friend._id]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // When typing indicator appears/disappears, ensure we scroll to show it and then back to last message
+  useEffect(() => {
+    if (typingVisible) {
+      // Wait a small amount for the typing DOM to render then scroll
+      setTimeout(() => scrollToBottom(), 60);
+    } else {
+      // When typing hides, ensure the last real message is at bottom
+      setTimeout(() => scrollToBottom(), 100);
+    }
+  }, [isTyping]);
 
   // Mark messages as read when user focuses on the chat window
   useEffect(() => {
@@ -299,6 +334,18 @@ const ChatWindow = ({
       setMessages((prev) => prev.filter((msg) => msg._id !== tempMessage._id));
     } finally {
       setSending(false);
+      // Refocus input so user can continue typing without click
+      // Ensure focus is restored after DOM updates; double rAF is robust across browsers
+      try {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            inputRef.current?.focus();
+          });
+        });
+      } catch (err) {
+        // Fallback
+        setTimeout(() => inputRef.current?.focus(), 0);
+      }
     }
   };
 
@@ -553,12 +600,13 @@ const ChatWindow = ({
       <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
         <form onSubmit={handleSendMessage} className="flex items-center gap-3">
           <input
+            ref={inputRef}
             type="text"
             value={newMessage}
             onChange={handleTyping}
             placeholder={loading ? "Loading messages..." : "Type a message..."}
             className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={sending || loading}
+            disabled={loading}
           />
           <button
             type="submit"

@@ -26,7 +26,21 @@ const chatRoomSchema = new mongoose.Schema({
   },
 });
 
-// Ensure only two participants per chat room (for now)
-chatRoomSchema.index({ participants: 1 }, { unique: true });
+// chatRoomSchema.pre("save", function (next) {
+//   if (Array.isArray(this.participants) && this.participants.length > 0) {
+//     // Convert ObjectIds to strings and sort to ensure deterministic order
+//     this.participants = this.participants
+//       .map((p) => (p && p.toString ? p.toString() : p))
+//       .sort();
+//   }
+//   next();
+// });
+
+// // For 1:1 chats we index participants.0 and participants.1 (sorted) as a unique pair.
+// // Make it sparse so legacy rooms with different shapes do not conflict.
+// chatRoomSchema.index(
+//   { "participants.0": 1, "participants.1": 1 },
+//   { unique: true, sparse: true }
+// );
 
 export default mongoose.model("ChatRoom", chatRoomSchema);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import FriendsList from "../components/FriendsList";
 import ChatWindow from "../components/ChatWindow";
@@ -20,6 +20,7 @@ import socketService from "../services/socket";
 const HomePage = () => {
   const { user, logout } = useAuth();
   const [selectedFriend, setSelectedFriend] = useState(null);
+  const selectedFriendRef = useRef(null);
   const [friends, setFriends] = useState([]);
   const [onlineFriends, setOnlineFriends] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
@@ -100,6 +101,32 @@ const HomePage = () => {
               },
             ]);
           });
+
+          // When a new message arrives and user doesn't have that chat open,
+          // increment the unread count for the corresponding friend in the sidebar.
+          socketService.onNewMessage((message) => {
+            try {
+              const senderId =
+                typeof message.sender === "object"
+                  ? message.sender._id || message.sender.id
+                  : message.sender;
+
+              // If there's no selectedFriend or the message is from someone else,
+              // increment unread count for that friend. Use ref to get latest selection.
+              const currentSelected = selectedFriendRef.current;
+              if (!currentSelected || currentSelected._id !== senderId) {
+                setUnreadCounts((prev) => {
+                  const current = prev[senderId] || 0;
+                  return { ...prev, [senderId]: current + 1 };
+                });
+              } else {
+                // If the chat is open, ensure the unread count is zero
+                setUnreadCounts((prev) => ({ ...prev, [senderId]: 0 }));
+              }
+            } catch (err) {
+              console.error("Error handling sidebar unread increment:", err);
+            }
+          });
         }
 
         // Update online status
@@ -122,6 +149,10 @@ const HomePage = () => {
 
   const handleFriendSelect = (friend) => {
     setSelectedFriend(friend);
+    selectedFriendRef.current = friend;
+
+    // Clear unread count for this friend immediately when opening chat
+    setUnreadCounts((prev) => ({ ...prev, [friend._id]: 0 }));
   };
 
   const handleUnreadUpdate = (friendId, count) => {
@@ -143,7 +174,7 @@ const HomePage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-[calc(100vh-56px)] bg-gray-100 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
@@ -153,7 +184,7 @@ const HomePage = () => {
   }
 
   return (
-    <div className="flex flex-1 min-h-0 h-full bg-gray-100 dark:bg-gray-900 overflow-hidden">
+    <div className="flex flex-1 min-h-0 h-[calc(100vh-56px)] bg-gray-100 dark:bg-gray-900 overflow-hidden">
       {/* Left Sidebar - Friends List */}
       <div
         className={`${
