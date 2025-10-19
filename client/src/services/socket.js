@@ -151,6 +151,13 @@ class SocketService {
       this.socket.removeAllListeners();
     }
   }
+
+  // Remove a specific listener for an event
+  off(event, callback) {
+    if (this.socket) {
+      this.socket.off(event, callback);
+    }
+  }
 }
 
 export default new SocketService();

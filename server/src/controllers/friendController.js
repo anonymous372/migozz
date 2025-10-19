@@ -94,7 +94,7 @@ export const getFriendRequests = async (req, res) => {
     const userId = req.user.id;
 
     const friendRequests = await Friend.find({
-      $or: [{ requester: userId }, { recipient: userId }],
+      $or: [{ recipient: userId }],
       status: "pending",
     })
       .populate("requester", "username email avatar")
