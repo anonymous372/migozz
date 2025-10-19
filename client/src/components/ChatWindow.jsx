@@ -3,6 +3,7 @@ import { Send, ArrowLeft, Phone, Video, MoreVertical } from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
 import { useAuth } from "../context/AuthContext";
+import peerService from "../services/peer";
 
 const ChatWindow = ({
   friend,
@@ -352,6 +353,25 @@ const ChatWindow = ({
     );
   };
 
+  const handleVideoCall = async () => {
+    // Initialize peer with your user ID
+    await peerService.init(user._id || user.id);
+
+    // Start call to friend's peerId
+    peerService.startCall(friend._id);
+
+    // Handle incoming remote stream
+    peerService.onStreamCallback((peerId, stream) => {
+      const videoElem = document.getElementById("remote-video");
+      if (videoElem) videoElem.srcObject = stream;
+    });
+
+    // Set local video
+    const localVideoElem = document.getElementById("local-video");
+    if (!peerService.localStream) return;
+    localVideoElem.srcObject = peerService.localStream;
+  };
+
   // NOTE: don't early-return on loading — keep header and input visible
   // and show a loading UI inside the messages area so the whole chat window
   // (header + messages + input) fits within the 100vh.
@@ -385,7 +405,13 @@ const ChatWindow = ({
           <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
             <Phone className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+          {/* <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+            <Video className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button> */}
+          <button
+            onClick={handleVideoCall}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
             <Video className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
           <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">

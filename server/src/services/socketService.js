@@ -38,6 +38,7 @@ export const handleConnection = (io) => {
       socketId: socket.id,
       user: socket.user,
       isOnline: true,
+      peerId: null, // will be set when frontend sends peerId
     });
 
     // Update user online status in database
@@ -56,7 +57,7 @@ export const handleConnection = (io) => {
       avatar: socket.user.avatar,
     });
 
-    // Handle sending messages
+    // Handle sending messages (receiving it on server)
     socket.on("send_message", async (data) => {
       try {
         const { receiverId, content, messageType = "text" } = data;
@@ -90,20 +91,20 @@ export const handleConnection = (io) => {
           },
         };
 
-        // Send to receiver if online
+        // Send to receiver if online (this new_message event will be handled on client side)
         const receiverConnection = connectedUsers.get(receiverId);
         if (receiverConnection) {
           io.to(receiverConnection.socketId).emit("new_message", message);
         }
 
-        // Send confirmation to sender
+        // Send confirmation to sender (same client who sent the message)
         socket.emit("message_sent", message);
 
         // Broadcast to room if it's a group chat (for future implementation)
-        io.to(`chat_${[socket.userId, receiverId].sort().join("_")}`).emit(
-          "new_message",
-          message
-        );
+        // io.to(`chat_${[socket.userId, receiverId].sort().join("_")}`).emit(
+        //   "new_message",
+        //   message
+        // );
       } catch (error) {
         console.error("Send message error:", error);
         socket.emit("error", { message: "Failed to send message" });
@@ -166,6 +167,62 @@ export const handleConnection = (io) => {
         console.error("Read status update error:", error);
       }
     });
+
+    // Handle peer ID registration for WebRTC
+    socket.on("register_peer", ({ peerId }) => {
+      const user = connectedUsers.get(socket.userId);
+      if (user) {
+        user.peerId = peerId;
+        connectedUsers.set(socket.userId, user);
+      }
+    });
+
+    // User A wants to call User B
+    socket.on("call_user", ({ toUserId }) => {
+      const callee = connectedUsers.get(toUserId);
+      if (callee && callee.peerId) {
+        io.to(callee.socketId).emit("incoming_call", {
+          fromUserId: socket.userId,
+          fromUsername: socket.user.username,
+          fromAvatar: socket.user.avatar,
+          peerId: connectedUsers.get(socket.userId).peerId
+        });
+      } else {
+        socket.emit("error", { message: "User is not online or not ready for call" });
+      }
+    });
+
+    // User B accepts call
+    socket.on("accept_call", ({ toUserId }) => {
+      const caller = connectedUsers.get(toUserId);
+      if (caller) {
+        io.to(caller.socketId).emit("call_accepted", {
+          byUserId: socket.userId,
+          peerId: connectedUsers.get(socket.userId).peerId
+        });
+      }
+    });
+
+    // User B rejects call
+    socket.on("reject_call", ({ toUserId }) => {
+      const caller = connectedUsers.get(toUserId);
+      if (caller) {
+        io.to(caller.socketId).emit("call_rejected", {
+          byUserId: socket.userId
+        });
+      }
+    });
+
+    // End call
+    socket.on("end_call", ({ toUserId }) => {
+      const otherUser = connectedUsers.get(toUserId);
+      if (otherUser) {
+        io.to(otherUser.socketId).emit("call_ended", {
+          byUserId: socket.userId
+        });
+      }
+    });
+
 
     // Handle disconnection
     socket.on("disconnect", async () => {

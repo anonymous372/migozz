@@ -15,6 +15,8 @@
     "@tailwindcss/vite": "^4.1.13",
     "axios": "^1.12.2",
     "lucide-react": "^0.544.0",
+    "peer": "^1.0.2",
+    "peerjs": "^1.5.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.1",

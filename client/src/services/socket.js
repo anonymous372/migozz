@@ -44,7 +44,7 @@ class SocketService {
     }
   }
 
-  // Message events
+  // Message events (emit send msg to the server)
   sendMessage(receiverId, content, messageType = "text") {
     if (this.socket && this.isConnected) {
       this.socket.emit("send_message", {
@@ -55,6 +55,7 @@ class SocketService {
     }
   }
 
+  // listens for "new_message" from server (someone sent you a message).
   onNewMessage(callback) {
     if (this.socket) {
       this.socket.on("new_message", callback);
