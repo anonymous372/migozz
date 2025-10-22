@@ -11,6 +11,8 @@ import {
   Menu,
   X,
   UserCheck,
+  Mail,
+  ArrowLeftToLine,
 } from "lucide-react";
 import Tooltip from "../components/Tooltip";
 import AddFriendModal from "../components/AddFriendModal";
@@ -227,6 +229,28 @@ const HomePage = () => {
     setUnreadCounts((prev) => ({ ...prev, [friend._id]: 0 }));
   };
 
+  // Keep the ref in sync with the selectedFriend state so event handlers
+  // and socket callbacks can read the latest value.
+  useEffect(() => {
+    selectedFriendRef.current = selectedFriend;
+  }, [selectedFriend]);
+
+  // Clear selected friend when Escape key is pressed
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" || e.key === "Esc") {
+        // only update when a friend is actually selected
+        if (selectedFriendRef.current) {
+          setSelectedFriend(null);
+          selectedFriendRef.current = null;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleUnreadUpdate = (friendId, count) => {
     setUnreadCounts((prev) => ({
       ...prev,
@@ -379,7 +403,7 @@ const HomePage = () => {
                     className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
                     aria-label="Friend Requests"
                   >
-                    <UserCheck className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    <Mail className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     {friendRequests.length > 0 && (
                       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                         {friendRequests.length}
@@ -391,17 +415,21 @@ const HomePage = () => {
             )}
 
             {/* Sidebar Toggle Button */}
+            {/* <Tooltip
+              label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            > */}
             <button
               onClick={toggleSidebar}
               className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              // title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {sidebarCollapsed ? (
                 <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               ) : (
-                <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <ArrowLeftToLine className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               )}
             </button>
+            {/* </Tooltip> */}
           </div>
         </div>
 

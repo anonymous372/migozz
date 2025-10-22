@@ -371,7 +371,7 @@ const ChatWindow = ({
     typingTimeoutRef.current = setTimeout(() => {
       setTyping(false);
       socketService.stopTyping(friend._id);
-    }, 1000);
+    }, 1500);
   };
 
   const formatTime = (timestamp) => {
@@ -417,12 +417,12 @@ const ChatWindow = ({
       {/* Fixed Chat Header */}
       <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <button
+          {/* <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 lg:hidden"
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
           >
             <ArrowLeft className="w-5 h-5" />
-          </button>
+          </button> */}
           <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               {friend.username.charAt(0).toUpperCase()}
