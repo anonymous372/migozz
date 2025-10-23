@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../constants";
 
 const AuthContext = createContext();
 
@@ -54,15 +55,12 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           // Validate token by fetching user profile
-          const response = await fetch(
-            "http://localhost:5001/api/v1/users/profile",
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
+          const response = await fetch(`${API_BASE_URL}/users/profile`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
 
           const data = await response.json();
 
@@ -94,7 +92,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch("http://localhost:5001/api/v1/login", {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,15 +107,12 @@ export const AuthProvider = ({ children }) => {
 
         // Get user profile after successful login
         try {
-          const profileResponse = await fetch(
-            "http://localhost:5001/api/v1/users/profile",
-            {
-              headers: {
-                Authorization: `Bearer ${data.data.token}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
+          const profileResponse = await fetch(`${API_BASE_URL}/users/profile`, {
+            headers: {
+              Authorization: `Bearer ${data.data.token}`,
+              "Content-Type": "application/json",
+            },
+          });
 
           const profileData = await profileResponse.json();
 
@@ -163,7 +158,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
-      const response = await fetch("http://localhost:5001/api/v1/register", {
+      const response = await fetch(`${API_BASE_URL}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { SOCKET_BASE_URL } from "../constants";
 
 class SocketService {
   constructor() {
@@ -11,7 +12,9 @@ class SocketService {
       return this.socket;
     }
 
-    this.socket = io("http://localhost:5001", {
+
+
+    this.socket = io(SOCKET_BASE_URL, {
       auth: {
         token: token,
       },

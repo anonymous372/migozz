@@ -1,7 +1,6 @@
 // Simple test script for authentication endpoints
 import fetch from "node-fetch";
-
-const BASE_URL = "http://localhost:5001/api/v1";
+import { API_BASE_URL as BASE_URL } from "../client/src/constants.js";
 
 const testAuth = async () => {
   try {

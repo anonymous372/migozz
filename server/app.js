@@ -13,15 +13,20 @@ import { Server } from "socket.io";
 import { outGreen, outYellow } from "./src/utils/helpers.js";
 import router from "./src/routes/index.js";
 import { socketAuth, handleConnection } from "./src/services/socketService.js";
+import { PeerServer } from "peer";
 
 // Initialize the Express application
 const app = express();
 const server = createServer(app);
 
+// client url
+// const CLIENT_URL = "http://10.42.0.52:5173";
+const CLIENT_URL = "http://localhost:5173";
+
 // Initialize Socket.io
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: process.env.CLIENT_URL || CLIENT_URL,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -79,5 +84,12 @@ connectDB().then(() => {
     console.log(`Server started on port ${PORT}`);
     console.log(`API available at http://localhost:${PORT}/api/v1`);
     console.log(`Socket.io server running on port ${PORT}`);
+
+    const peerServer = PeerServer({
+      port: 9000,
+      path: "/peerjs",
+    });
+
+    console.log("PeerJS server running on port 9000");
   });
 });

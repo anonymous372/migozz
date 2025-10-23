@@ -3,7 +3,8 @@ import { Send, ArrowLeft, Phone, Video, MoreVertical } from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
 import { useAuth } from "../context/AuthContext";
-import peerService from "../services/peer";
+import peerService from "../services/peerService";
+import VideoCallModal from "./VideoCallModal";
 
 const ChatWindow = ({
   friend,
@@ -25,6 +26,7 @@ const ChatWindow = ({
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const readTimeoutRef = useRef(null);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   // Clear UI synchronously before paint when switching chats to avoid flashing old messages
   useLayoutEffect(() => {
@@ -400,23 +402,8 @@ const ChatWindow = ({
     );
   };
 
-  const handleVideoCall = async () => {
-    // Initialize peer with your user ID
-    await peerService.init(user._id || user.id);
-
-    // Start call to friend's peerId
-    peerService.startCall(friend._id);
-
-    // Handle incoming remote stream
-    peerService.onStreamCallback((peerId, stream) => {
-      const videoElem = document.getElementById("remote-video");
-      if (videoElem) videoElem.srcObject = stream;
-    });
-
-    // Set local video
-    const localVideoElem = document.getElementById("local-video");
-    if (!peerService.localStream) return;
-    localVideoElem.srcObject = peerService.localStream;
+  const handleVideoCall = () => {
+    setVideoModalOpen(true);
   };
 
   // NOTE: don't early-return on loading — keep header and input visible
@@ -643,6 +630,12 @@ const ChatWindow = ({
           </button>
         </form>
       </div>
+      <VideoCallModal
+        open={videoModalOpen}
+        onClose={() => setVideoModalOpen(false)}
+        friend={friend}
+        userId={user._id}
+      />
     </div>
   );
 };

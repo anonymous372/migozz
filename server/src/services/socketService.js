@@ -38,7 +38,6 @@ export const handleConnection = (io) => {
       socketId: socket.id,
       user: socket.user,
       isOnline: true,
-      peerId: null, // will be set when frontend sends peerId
     });
 
     // Update user online status in database
@@ -165,61 +164,6 @@ export const handleConnection = (io) => {
         }
       } catch (error) {
         console.error("Read status update error:", error);
-      }
-    });
-
-    // Handle peer ID registration for WebRTC
-    socket.on("register_peer", ({ peerId }) => {
-      const user = connectedUsers.get(socket.userId);
-      if (user) {
-        user.peerId = peerId;
-        connectedUsers.set(socket.userId, user);
-      }
-    });
-
-    // User A wants to call User B
-    socket.on("call_user", ({ toUserId }) => {
-      const callee = connectedUsers.get(toUserId);
-      if (callee && callee.peerId) {
-        io.to(callee.socketId).emit("incoming_call", {
-          fromUserId: socket.userId,
-          fromUsername: socket.user.username,
-          fromAvatar: socket.user.avatar,
-          peerId: connectedUsers.get(socket.userId).peerId
-        });
-      } else {
-        socket.emit("error", { message: "User is not online or not ready for call" });
-      }
-    });
-
-    // User B accepts call
-    socket.on("accept_call", ({ toUserId }) => {
-      const caller = connectedUsers.get(toUserId);
-      if (caller) {
-        io.to(caller.socketId).emit("call_accepted", {
-          byUserId: socket.userId,
-          peerId: connectedUsers.get(socket.userId).peerId
-        });
-      }
-    });
-
-    // User B rejects call
-    socket.on("reject_call", ({ toUserId }) => {
-      const caller = connectedUsers.get(toUserId);
-      if (caller) {
-        io.to(caller.socketId).emit("call_rejected", {
-          byUserId: socket.userId
-        });
-      }
-    });
-
-    // End call
-    socket.on("end_call", ({ toUserId }) => {
-      const otherUser = connectedUsers.get(toUserId);
-      if (otherUser) {
-        io.to(otherUser.socketId).emit("call_ended", {
-          byUserId: socket.userId
-        });
       }
     });
 
