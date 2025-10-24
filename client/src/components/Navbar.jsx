@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Mail, Sun, Moon, Disc3 } from "lucide-react";
+import { Mail, Sun, Moon, Disc3, Gamepad } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 
 const Navbar = () => {
@@ -18,6 +18,13 @@ const Navbar = () => {
 
       {/* Right: Icons and Controls */}
       <div className="flex items-center gap-6">
+        <Link
+          to="/games"
+          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-300"
+          aria-label="Games"
+        >
+          <Gamepad className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+        </Link>
         {/* Inbox Icon with Notification */}
         {/* <button
           className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-300"
