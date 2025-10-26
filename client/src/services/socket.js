@@ -12,8 +12,6 @@ class SocketService {
       return this.socket;
     }
 
-
-
     this.socket = io(SOCKET_BASE_URL, {
       auth: {
         token: token,
@@ -140,6 +138,127 @@ class SocketService {
       this.socket.on("user_offline", callback);
     }
   }
+
+  offerVideoCall(receiverId, callerInfo) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("video_call_offer", { receiverId, callerInfo });
+    }
+  }
+
+  acceptVideoCall(callerId, accepterInfo) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("video_call_accept", { callerId, accepterInfo });
+    }
+  }
+
+  rejectVideoCall(callerId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("video_call_reject", { callerId });
+    }
+  }
+
+  onVideoCallOffer(callback) {
+    if (this.socket) {
+      this.socket.on("video_call_offer", callback);
+    }
+  }
+
+  onVideoCallAccept(callback) {
+    if (this.socket) {
+      this.socket.on("video_call_accept", callback);
+    }
+  }
+
+  onVideoCallReject(callback) {
+    if (this.socket) {
+      this.socket.on("video_call_reject", callback);
+    }
+  }
+
+  endVideoCall(receiverId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("video_call_end", { receiverId });
+    }
+  }
+
+  onVideoCallEnd(callback) {
+    if (this.socket) {
+      this.socket.on("video_call_end", callback);
+    }
+  }
+
+  cancelVideoCall(receiverId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("video_call_cancel", { receiverId });
+    }
+  }
+
+  onVideoCallCancel(callback) {
+    if (this.socket) {
+      this.socket.on("video_call_cancel", callback);
+    }
+  }
+
+  offerAudioCall(receiverId, callerInfo) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("audio_call_offer", { receiverId, callerInfo });
+    }
+  }
+
+  acceptAudioCall(callerId, accepterInfo) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("audio_call_accept", { callerId, accepterInfo });
+    }
+  }
+
+  rejectAudioCall(callerId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("audio_call_reject", { callerId });
+    }
+  }
+
+  cancelAudioCall(receiverId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("audio_call_cancel", { receiverId });
+    }
+  }
+
+  endAudioCall(receiverId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("audio_call_end", { receiverId });
+    }
+  }
+
+  onAudioCallOffer(callback) {
+    if (this.socket) {
+      this.socket.on("audio_call_offer", callback);
+    }
+  }
+
+  onAudioCallAccept(callback) {
+    if (this.socket) {
+      this.socket.on("audio_call_accept", callback);
+    }
+  }
+
+  onAudioCallReject(callback) {
+    if (this.socket) {
+      this.socket.on("audio_call_reject", callback);
+    }
+  }
+
+  onAudioCallCancel(callback) {
+    if (this.socket) {
+      this.socket.on("audio_call_cancel", callback);
+    }
+  }
+
+  onAudioCallEnd(callback) {
+    if (this.socket) {
+      this.socket.on("audio_call_end", callback);
+    }
+  }
+
 
   // Error handling
   onError(callback) {

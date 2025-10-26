@@ -167,6 +167,125 @@ export const handleConnection = (io) => {
       }
     });
 
+    socket.on("video_call_offer", (data) => {
+      const { receiverId, callerInfo } = data;
+      const receiverConnection = connectedUsers.get(receiverId);
+
+      if (receiverConnection) {
+        io.to(receiverConnection.socketId).emit("video_call_offer", {
+          callerInfo, // Contains user object of the caller
+        });
+      }
+      // Optional: Add a "user is offline" emit back to the caller
+    });
+
+    // Handle a user accepting a call
+    socket.on("video_call_accept", (data) => {
+      const { callerId, accepterInfo } = data;
+      const callerConnection = connectedUsers.get(callerId);
+
+      if (callerConnection) {
+        io.to(callerConnection.socketId).emit("video_call_accept", {
+          accepterInfo, // Contains user object of the person who accepted
+        });
+      }
+    });
+
+    // Handle a user rejecting a call
+    socket.on("video_call_reject", (data) => {
+      const { callerId } = data;
+      const callerConnection = connectedUsers.get(callerId);
+
+      if (callerConnection) {
+        io.to(callerConnection.socketId).emit("video_call_reject", {
+          rejectedBy: socket.user.username,
+        });
+      }
+    });
+
+    socket.on("video_call_end", (data) => {
+      const { receiverId } = data;
+      const receiverConnection = connectedUsers.get(receiverId);
+
+      if (receiverConnection) {
+        // Notify the other user that the call has ended
+        io.to(receiverConnection.socketId).emit("video_call_end", {
+          enderId: socket.userId,
+        });
+      }
+    });
+
+    socket.on("video_call_cancel", (data) => {
+      const { receiverId } = data;
+      const receiverConnection = connectedUsers.get(receiverId);
+
+      if (receiverConnection) {
+        // Notify the receiver to close their incoming call modal
+        io.to(receiverConnection.socketId).emit("video_call_cancel", {
+          cancelerId: socket.userId,
+        });
+      }
+    });
+
+    // Handle a user offering an audio call
+    socket.on("audio_call_offer", (data) => {
+      const { receiverId, callerInfo } = data;
+      const receiverConnection = connectedUsers.get(receiverId);
+
+      if (receiverConnection) {
+        io.to(receiverConnection.socketId).emit("audio_call_offer", {
+          callerInfo,
+        });
+      }
+    });
+
+    // Handle a user accepting an audio call
+    socket.on("audio_call_accept", (data) => {
+      const { callerId, accepterInfo } = data;
+      const callerConnection = connectedUsers.get(callerId);
+
+      if (callerConnection) {
+        io.to(callerConnection.socketId).emit("audio_call_accept", {
+          accepterInfo,
+        });
+      }
+    });
+
+    // Handle a user rejecting an audio call
+    socket.on("audio_call_reject", (data) => {
+      const { callerId } = data;
+      const callerConnection = connectedUsers.get(callerId);
+
+      if (callerConnection) {
+        io.to(callerConnection.socketId).emit("audio_call_reject", {
+          rejectedBy: socket.user.username,
+        });
+      }
+    });
+
+    // Handle a user canceling an audio call
+    socket.on("audio_call_cancel", (data) => {
+      const { receiverId } = data;
+      const receiverConnection = connectedUsers.get(receiverId);
+
+      if (receiverConnection) {
+        io.to(receiverConnection.socketId).emit("audio_call_cancel", {
+          cancelerId: socket.userId,
+        });
+      }
+    });
+
+    // Handle a user ending an audio call
+    socket.on("audio_call_end", (data) => {
+      const { receiverId } = data;
+      const receiverConnection = connectedUsers.get(receiverId);
+
+      if (receiverConnection) {
+        io.to(receiverConnection.socketId).emit("audio_call_end", {
+          enderId: socket.userId,
+        });
+      }
+    });
 
     // Handle disconnection
     socket.on("disconnect", async () => {

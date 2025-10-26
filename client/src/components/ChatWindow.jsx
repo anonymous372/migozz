@@ -4,13 +4,15 @@ import apiService from "../services/api";
 import socketService from "../services/socket";
 import { useAuth } from "../context/AuthContext";
 import peerService from "../services/peerService";
-import VideoCallModal from "./VideoCallModal";
+// import VideoCallModal from "./VideoCallModal";
 
 const ChatWindow = ({
   friend,
   onClose,
   onUnreadUpdate,
   sidebarCollapsed = false,
+  onStartCall,
+  onStartAudioCall,
 }) => {
   const { user } = useAuth();
 
@@ -26,7 +28,7 @@ const ChatWindow = ({
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const readTimeoutRef = useRef(null);
-  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  // const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   // Clear UI synchronously before paint when switching chats to avoid flashing old messages
   useLayoutEffect(() => {
@@ -402,9 +404,9 @@ const ChatWindow = ({
     );
   };
 
-  const handleVideoCall = () => {
-    setVideoModalOpen(true);
-  };
+  // const handleVideoCall = () => {
+  //   setVideoModalOpen(true);
+  // };
 
   // NOTE: don't early-return on loading — keep header and input visible
   // and show a loading UI inside the messages area so the whole chat window
@@ -436,18 +438,28 @@ const ChatWindow = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+          <button
+            onClick={() => onStartAudioCall(friend)}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
             <Phone className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
           {/* <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
             <Video className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button> */}
-          <button
+          {/* <button
             onClick={handleVideoCall}
             className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
           >
             <Video className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button> */}
+          <button
+            onClick={() => onStartCall(friend)}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
+            <Video className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
+
           <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
             <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
@@ -630,12 +642,6 @@ const ChatWindow = ({
           </button>
         </form>
       </div>
-      <VideoCallModal
-        open={videoModalOpen}
-        onClose={() => setVideoModalOpen(false)}
-        friend={friend}
-        userId={user._id}
-      />
     </div>
   );
 };
