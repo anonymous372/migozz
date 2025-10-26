@@ -13,6 +13,7 @@ import Sudoku from "./screens/games/Sudoku";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
+import TicTacToeMultiplayer from "./screens/games/TicTacToeMultiplayer";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <ThemeProvider>
@@ -52,6 +53,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               element={
                 <ProtectedRoute>
                   <Sudoku />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/games/tictactoeonline"
+              element={
+                <ProtectedRoute>
+                  <TicTacToeMultiplayer />
                 </ProtectedRoute>
               }
             />

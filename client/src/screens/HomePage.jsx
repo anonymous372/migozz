@@ -72,139 +72,139 @@ const HomePage = () => {
         }
 
         // Connect to socket
-        const token = localStorage.getItem("token");
-        if (token) {
-          socketService.connect(token);
+        // const token = localStorage.getItem("token");
+        // if (token) {
+        // socketService.connect(token);
 
-          // Set up socket listeners
-          socketService.onUserOnline((data) => {
-            setOnlineFriends((prev) => {
-              const exists = prev.find((friend) => friend._id === data.userId);
-              if (!exists) {
-                return [
-                  ...prev,
-                  {
-                    _id: data.userId,
-                    username: data.username,
-                    avatar: data.avatar,
-                    isOnline: true,
-                  },
-                ];
-              }
-              return prev;
-            });
-          });
-
-          socketService.onUserOffline((data) => {
-            setOnlineFriends((prev) =>
-              prev.filter((friend) => friend._id !== data.userId)
-            );
-          });
-
-          socketService.onNewFriendRequest((data) => {
-            setFriendRequests((prev) => [
-              ...prev,
-              {
-                _id: Date.now(), // temporary ID
-                requester: {
-                  _id: data.requesterId,
-                  username: data.requesterUsername,
-                  avatar: data.requesterAvatar,
+        // Set up socket listeners
+        socketService.onUserOnline((data) => {
+          setOnlineFriends((prev) => {
+            const exists = prev.find((friend) => friend._id === data.userId);
+            if (!exists) {
+              return [
+                ...prev,
+                {
+                  _id: data.userId,
+                  username: data.username,
+                  avatar: data.avatar,
+                  isOnline: true,
                 },
-                status: "pending",
+              ];
+            }
+            return prev;
+          });
+        });
+
+        socketService.onUserOffline((data) => {
+          setOnlineFriends((prev) =>
+            prev.filter((friend) => friend._id !== data.userId)
+          );
+        });
+
+        socketService.onNewFriendRequest((data) => {
+          setFriendRequests((prev) => [
+            ...prev,
+            {
+              _id: Date.now(), // temporary ID
+              requester: {
+                _id: data.requesterId,
+                username: data.requesterUsername,
+                avatar: data.requesterAvatar,
               },
-            ]);
-          });
+              status: "pending",
+            },
+          ]);
+        });
 
-          // When a new message arrives and user doesn't have that chat open,
-          // increment the unread count for the corresponding friend in the sidebar.
-          socketService.onNewMessage((message) => {
-            try {
-              const senderId =
-                typeof message.sender === "object"
-                  ? message.sender._id || message.sender.id
-                  : message.sender;
+        // When a new message arrives and user doesn't have that chat open,
+        // increment the unread count for the corresponding friend in the sidebar.
+        socketService.onNewMessage((message) => {
+          try {
+            const senderId =
+              typeof message.sender === "object"
+                ? message.sender._id || message.sender.id
+                : message.sender;
 
-              // If there's no selectedFriend or the message is from someone else,
-              // increment unread count for that friend. Use ref to get latest selection.
-              const currentSelected = selectedFriendRef.current;
-              if (!currentSelected || currentSelected._id !== senderId) {
-                setUnreadCounts((prev) => {
-                  const current = prev[senderId] || 0;
-                  return { ...prev, [senderId]: current + 1 };
-                });
-              } else {
-                // If the chat is open, ensure the unread count is zero
-                setUnreadCounts((prev) => ({ ...prev, [senderId]: 0 }));
-              }
-            } catch (err) {
-              console.error("Error handling sidebar unread increment:", err);
-            }
-          });
-
-          // Video call listeners
-          socketService.onVideoCallOffer((data) => {
-            // Check if already in a call
-            if (activeCall || activeAudioCall) {
-              // Automatically reject if busy
-              socketService.rejectVideoCall(data.callerInfo._id);
+            // If there's no selectedFriend or the message is from someone else,
+            // increment unread count for that friend. Use ref to get latest selection.
+            const currentSelected = selectedFriendRef.current;
+            if (!currentSelected || currentSelected._id !== senderId) {
+              setUnreadCounts((prev) => {
+                const current = prev[senderId] || 0;
+                return { ...prev, [senderId]: current + 1 };
+              });
             } else {
-              setIncomingCall(data.callerInfo);
+              // If the chat is open, ensure the unread count is zero
+              setUnreadCounts((prev) => ({ ...prev, [senderId]: 0 }));
             }
-          });
+          } catch (err) {
+            console.error("Error handling sidebar unread increment:", err);
+          }
+        });
 
-          socketService.onVideoCallAccept((data) => {
-            // Call was accepted by the person we were calling
-            setOutgoingCall(null); // No longer "ringing"
-            setActiveCall({ friend: data.accepterInfo, isCaller: true });
-          });
+        // Video call listeners
+        socketService.onVideoCallOffer((data) => {
+          // Check if already in a call
+          if (activeCall || activeAudioCall) {
+            // Automatically reject if busy
+            socketService.rejectVideoCall(data.callerInfo._id);
+          } else {
+            setIncomingCall(data.callerInfo);
+          }
+        });
 
-          socketService.onVideoCallReject((data) => {
-            // Call was rejected
-            setOutgoingCall(null);
-            alert(`${data.rejectedBy} rejected the call.`);
-          });
+        socketService.onVideoCallAccept((data) => {
+          // Call was accepted by the person we were calling
+          setOutgoingCall(null); // No longer "ringing"
+          setActiveCall({ friend: data.accepterInfo, isCaller: true });
+        });
 
-          socketService.onVideoCallEnd(() => {
-            setActiveCall(null); // Just close the modal
-            // You could also add a "Call ended" notification here
-          });
+        socketService.onVideoCallReject((data) => {
+          // Call was rejected
+          setOutgoingCall(null);
+          alert(`${data.rejectedBy} rejected the call.`);
+        });
 
-          socketService.onVideoCallCancel(() => {
-            setIncomingCall(null); // Close the incoming call modal
-          });
+        socketService.onVideoCallEnd(() => {
+          setActiveCall(null); // Just close the modal
+          // You could also add a "Call ended" notification here
+        });
 
-          // Audio call listeners
-          socketService.onAudioCallOffer((data) => {
-            // --- BUSY CHECK: Update to check both call types ---
-            if (activeCall || activeAudioCall) {
-              socketService.rejectAudioCall(data.callerInfo._id);
-            } else {
-              setIncomingAudioCall(data.callerInfo);
-            }
-          });
+        socketService.onVideoCallCancel(() => {
+          setIncomingCall(null); // Close the incoming call modal
+        });
 
-          socketService.onAudioCallAccept((data) => {
-            setOutgoingAudioCall(null);
-            setActiveAudioCall({ friend: data.accepterInfo, isCaller: true });
-          });
+        // Audio call listeners
+        socketService.onAudioCallOffer((data) => {
+          // --- BUSY CHECK: Update to check both call types ---
+          if (activeCall || activeAudioCall) {
+            socketService.rejectAudioCall(data.callerInfo._id);
+          } else {
+            setIncomingAudioCall(data.callerInfo);
+          }
+        });
 
-          socketService.onAudioCallReject((data) => {
-            setOutgoingAudioCall(null);
-            alert(`${data.rejectedBy} rejected the call.`);
-          });
+        socketService.onAudioCallAccept((data) => {
+          setOutgoingAudioCall(null);
+          setActiveAudioCall({ friend: data.accepterInfo, isCaller: true });
+        });
 
-          socketService.onAudioCallCancel(() => {
-            setIncomingAudioCall(null);
-          });
+        socketService.onAudioCallReject((data) => {
+          setOutgoingAudioCall(null);
+          alert(`${data.rejectedBy} rejected the call.`);
+        });
 
-          socketService.onAudioCallEnd(() => {
-            setActiveAudioCall(null);
-          });
-        }
+        socketService.onAudioCallCancel(() => {
+          setIncomingAudioCall(null);
+        });
+
+        socketService.onAudioCallEnd(() => {
+          setActiveAudioCall(null);
+        });
+        // }
 
         // Update online status
-        await apiService.updateOnlineStatus(true);
+        // await apiService.updateOnlineStatus(true);
       } catch (error) {
         console.error("Error initializing data:", error);
       } finally {
@@ -216,8 +216,8 @@ const HomePage = () => {
 
     // Cleanup on unmount
     return () => {
-      apiService.updateOnlineStatus(false);
-      socketService.disconnect();
+      // apiService.updateOnlineStatus(false);
+      // socketService.disconnect();
     };
   }, []);
 
@@ -263,8 +263,8 @@ const HomePage = () => {
   };
 
   const handleLogout = () => {
-    apiService.updateOnlineStatus(false);
-    socketService.disconnect();
+    // apiService.updateOnlineStatus(false);
+    // socketService.disconnect();
     logout();
   };
 
@@ -456,7 +456,7 @@ const HomePage = () => {
         </div>
 
         {/* Logout Button at Bottom */}
-        <div className="p-4 flex-shrink-0">
+        {/* <div className="p-4 flex-shrink-0">
           <button
             onClick={handleLogout}
             className={`w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
@@ -471,7 +471,7 @@ const HomePage = () => {
               </span>
             )}
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Main Chat Area */}

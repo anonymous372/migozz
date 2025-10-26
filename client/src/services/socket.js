@@ -259,6 +259,66 @@ class SocketService {
     }
   }
 
+  // --- Tic Tac Toe Emitters ---
+  createTicTacToeGame() {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("tictactoe_create_game");
+    }
+  }
+
+  joinTicTacToeGame(roomCode) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("tictactoe_join_game", { roomCode });
+    }
+  }
+
+  makeTicTacToeMove(roomCode, index) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("tictactoe_make_move", { roomCode, index });
+    }
+  }
+
+  // --- Tic Tac Toe Listeners ---
+  onTicTacToeGameCreated(callback) {
+    if (this.socket) {
+      this.socket.on("tictactoe_game_created", callback);
+    }
+  }
+
+  onTicTacToeGameStart(callback) {
+    if (this.socket) {
+      this.socket.on("tictactoe_game_start", callback);
+    }
+  }
+
+  onTicTacToeUpdateState(callback) {
+    if (this.socket) {
+      this.socket.on("tictactoe_update_state", callback);
+    }
+  }
+
+  onTicTacToeOpponentLeft(callback) {
+    if (this.socket) {
+      this.socket.on("tictactoe_opponent_left", callback);
+    }
+  }
+
+  onTicTacToeError(callback) {
+    if (this.socket) {
+      this.socket.on("tictactoe_error", callback);
+    }
+  }
+
+  // Helper to remove all game listeners
+  removeAllTicTacToeListeners() {
+    if (this.socket) {
+      this.socket.off("tictactoe_game_created");
+      this.socket.off("tictactoe_game_start");
+      this.socket.off("tictactoe_update_state");
+      this.socket.off("tictactoe_opponent_left");
+      this.socket.off("tictactoe_error");
+    }
+  }
 
   // Error handling
   onError(callback) {

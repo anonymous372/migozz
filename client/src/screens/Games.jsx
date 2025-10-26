@@ -38,6 +38,12 @@ const Games = () => {
           description="Daily Sudoku puzzles to exercise your brain."
           to="/games/sudoku"
         />
+
+        <GameCard
+          title="Tic Tac Toe Online"
+          description="Daily Sudoku puzzles to exercise your brain."
+          to="/games/tictactoeonline"
+        />
       </div>
     </div>
   );

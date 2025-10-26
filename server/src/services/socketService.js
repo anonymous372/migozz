@@ -3,6 +3,7 @@ import User from "../models/User.js";
 
 // Store connected users
 const connectedUsers = new Map();
+const tictactoeGames = new Map();
 
 // Socket.io authentication middleware
 export const socketAuth = async (socket, next) => {
@@ -287,6 +288,138 @@ export const handleConnection = (io) => {
       }
     });
 
+    socket.on("tictactoe_create_game", () => {
+      try {
+        // Generate a random, simple room code
+        const roomCode = Math.random()
+          .toString(36)
+          .substring(2, 8)
+          .toUpperCase();
+
+        // Ensure code is unique (highly-unlikely collision, but good practice)
+        if (tictactoeGames.has(roomCode)) {
+          // You could retry generating, but for now, just send an error
+          socket.emit(
+            "tictactoe_error",
+            "Failed to create room, please try again."
+          );
+          console.log("Shit went down");
+          return;
+        }
+
+        // Player X is the creator
+        const game = {
+          roomCode,
+          players: [{ id: socket.userId, user: socket.user, symbol: "X" }],
+          squares: Array(9).fill(null),
+          turn: "X", // X always starts
+          status: "waiting",
+        };
+
+        tictactoeGames.set(roomCode, game);
+        socket.join(roomCode); // Have the creator join the socket.io room
+
+        // Send the room code back to the creator
+        socket.emit("tictactoe_game_created", { roomCode, playerSymbol: "X" });
+      } catch (error) {
+        console.error("Error creating Tic Tac Toe game:", error);
+        socket.emit(
+          "tictactoe_error",
+          "An error occurred while creating the game."
+        );
+      }
+    });
+
+    socket.on("tictactoe_join_game", (data) => {
+      try {
+        const { roomCode } = data;
+        const game = tictactoeGames.get(roomCode);
+
+        if (!game) {
+          socket.emit("tictactoe_error", "Room not found.");
+          return;
+        }
+
+        if (game.players.length >= 2) {
+          socket.emit("tictactoe_error", "Room is full.");
+          return;
+        }
+
+        // Player O is the joiner
+        const playerO = { id: socket.userId, user: socket.user, symbol: "O" };
+        game.players.push(playerO);
+        game.status = "playing";
+
+        socket.join(roomCode);
+
+        const playerX = game.players[0];
+
+        // Prepare simplified user info for clients
+        const payload = {
+          roomCode,
+          squares: game.squares,
+          turn: game.turn,
+          players: [
+            { user: playerX.user, symbol: playerX.symbol },
+            { user: playerO.user, symbol: playerO.symbol },
+          ],
+        };
+
+        // Emit 'game_start' to EVERYONE in the room (both players)
+        io.to(roomCode).emit("tictactoe_game_start", payload);
+      } catch (error) {
+        console.error("Error joining Tic Tac Toe game:", error);
+        socket.emit(
+          "tictactoe_error",
+          "An error occurred while joining the game."
+        );
+      }
+    });
+
+    socket.on("tictactoe_make_move", (data) => {
+      try {
+        const { roomCode, index } = data;
+        const game = tictactoeGames.get(roomCode);
+
+        if (!game || game.status !== "playing") return;
+
+        // Find which player is making the move
+        const player = game.players.find((p) => p.id === socket.userId);
+        if (!player) return; // Not a player in this game
+
+        // Validate move
+        if (game.turn !== player.symbol || game.squares[index]) {
+          // Invalid move (not your turn, or square taken)
+          // Optionally emit an error back to the player
+          socket.emit("tictactoe_error", "Invalid move.");
+          return;
+        }
+
+        // Apply move
+        game.squares[index] = player.symbol;
+        game.turn = player.symbol === "X" ? "O" : "X";
+
+        // Check for winner (you'll need to move calculateWinner to the server or duplicate it)
+        // Let's assume you have a calculateWinner function available here
+        // const winner = calculateWinner(game.squares);
+        // For now, we'll just broadcast the state. Client can calculate winner.
+
+        const payload = {
+          squares: game.squares,
+          turn: game.turn,
+          // winner: winner // (optional: calculate on server)
+        };
+
+        // Broadcast the updated state to EVERYONE in the room
+        io.to(roomCode).emit("tictactoe_update_state", payload);
+      } catch (error) {
+        console.error("Error making move:", error);
+        socket.emit(
+          "tictactoe_error",
+          "An error occurred while making your move."
+        );
+      }
+    });
     // Handle disconnection
     socket.on("disconnect", async () => {
       console.log(`User ${socket.user.username} disconnected`);
@@ -305,6 +438,18 @@ export const handleConnection = (io) => {
         userId: socket.userId,
         username: socket.user.username,
       });
+
+      for (const [roomCode, game] of tictactoeGames.entries()) {
+        const playerInGame = game.players.find((p) => p.id === socket.userId);
+
+        if (playerInGame) {
+          // Notify the other player
+          socket.to(roomCode).broadcast.emit("tictactoe_opponent_left");
+          // Remove the game
+          tictactoeGames.delete(roomCode);
+          break; // User can only be in one game
+        }
+      }
     });
   };
 };
