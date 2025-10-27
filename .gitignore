@@ -8,6 +8,7 @@ client/*.local
 server/node_modules
 server/.env
 server/clean.js
+server/uploads
 
 # Editor directories and files
 .vscode/*

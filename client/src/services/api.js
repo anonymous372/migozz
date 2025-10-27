@@ -152,6 +152,28 @@ class ApiService {
     });
     return response.json();
   }
+
+  // Upload file
+  async uploadFile(receiverId, file, caption = "") {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("receiverId", receiverId);
+    if (caption) formData.append("content", caption);
+
+    const token = localStorage.getItem("token");
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    // Don't set Content-Type for FormData, browser will set it with boundary
+
+    const response = await fetch(`${API_BASE_URL}/messages/upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return response.json();
+  }
 }
 
 export default new ApiService();

@@ -21,6 +21,19 @@ const messageSchema = new mongoose.Schema({
     enum: ["text", "image", "file"],
     default: "text",
   },
+  // File-specific fields (only populated if messageType is "image" or "file")
+  fileUrl: {
+    type: String,
+  },
+  fileName: {
+    type: String,
+  },
+  fileSize: {
+    type: Number, // in bytes
+  },
+  fileMimeType: {
+    type: String,
+  },
   isRead: {
     type: Boolean,
     default: false,

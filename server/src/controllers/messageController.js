@@ -2,6 +2,8 @@ import { API_RESPONSE } from "../utils/constants.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import ChatRoom from "../models/ChatRoom.js";
+import { isImage } from "../utils/upload.js";
+import path from "path";
 
 // Send message
 export const sendMessage = async (req, res) => {
@@ -220,6 +222,111 @@ export const markMessagesAsRead = async (req, res) => {
           null,
           "Internal Server Error",
           "Failed to mark messages as read"
+        )
+      );
+  }
+};
+
+// Upload file and create message
+export const uploadFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res
+        .status(400)
+        .json(API_RESPONSE(400, null, "Validation Error", "No file uploaded"));
+    }
+
+    const { receiverId } = req.body;
+    const senderId = req.user.id;
+
+    if (senderId === receiverId) {
+      return res
+        .status(400)
+        .json(
+          API_RESPONSE(
+            400,
+            null,
+            "Validation Error",
+            "Cannot send message to yourself"
+          )
+        );
+    }
+
+    // Check if receiver exists
+    const receiver = await User.findById(receiverId);
+    if (!receiver) {
+      return res
+        .status(404)
+        .json(API_RESPONSE(404, null, "Not Found", "Receiver not found"));
+    }
+
+    // Check if users are friends
+    const sender = await User.findById(senderId);
+    if (!sender.friends.includes(receiverId)) {
+      return res
+        .status(403)
+        .json(
+          API_RESPONSE(
+            403,
+            null,
+            "Forbidden",
+            "You can only send files to your friends"
+          )
+        );
+    }
+
+    // Determine message type based on file
+    const messageType = isImage(req.file.mimetype) ? "image" : "file";
+
+    // Create message with file info
+    const message = await Message.create({
+      sender: senderId,
+      receiver: receiverId,
+      content:
+        messageType === "image"
+          ? req.body.content || req.file.originalname
+          : req.file.originalname,
+      messageType,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      fileMimeType: req.file.mimetype,
+      // Store relative path to serve files
+      fileUrl: `/uploads/${req.file.filename}`,
+    });
+
+    // Find or create chat room
+    let chatRoom = await ChatRoom.findOne({
+      participants: { $all: [senderId, receiverId] },
+    });
+
+    if (!chatRoom) {
+      chatRoom = await ChatRoom.create({
+        participants: [senderId, receiverId],
+        lastMessage: message._id,
+        lastActivity: new Date(),
+      });
+    } else {
+      chatRoom.lastMessage = message._id;
+      chatRoom.lastActivity = new Date();
+      await chatRoom.save();
+    }
+
+    // Populate sender info for response
+    await message.populate("sender", "username avatar");
+
+    res
+      .status(201)
+      .json(API_RESPONSE(201, { message }, null, "File uploaded successfully"));
+  } catch (error) {
+    console.error("Upload file error:", error);
+    res
+      .status(500)
+      .json(
+        API_RESPONSE(
+          500,
+          null,
+          "Internal Server Error",
+          "Failed to upload file"
         )
       );
   }

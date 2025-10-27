@@ -135,6 +135,16 @@ export const handleConnection = (io) => {
       }
     });
 
+    // Handle file messages
+    socket.on("file_message_sent", (data) => {
+      const { receiverId, message } = data;
+      const receiverConnection = connectedUsers.get(receiverId);
+
+      if (receiverConnection) {
+        io.to(receiverConnection.socketId).emit("new_message", message);
+      }
+    });
+
     // Handle friend request notifications
     socket.on("friend_request_sent", (data) => {
       const { recipientId } = data;

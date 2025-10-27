@@ -9,11 +9,17 @@ import mongoose from "mongoose";
 import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import path from "path";
+import { fileURLToPath } from "url";
 // Assuming these imports are necessary and paths are correct
 import { outGreen, outYellow } from "./src/utils/helpers.js";
 import router from "./src/routes/index.js";
 import { socketAuth, handleConnection } from "./src/services/socketService.js";
 import { PeerServer } from "peer";
+
+// ES module dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize the Express application
 const app = express();
@@ -65,6 +71,9 @@ const connectDB = async () => {
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from uploads directory
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Custom Logger
 app.use((req, res, next) => {

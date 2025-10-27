@@ -1,9 +1,17 @@
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
-import { Send, ArrowLeft, Phone, Video, MoreVertical } from "lucide-react";
+import {
+  Send,
+  ArrowLeft,
+  Phone,
+  Video,
+  MoreVertical,
+  Paperclip,
+} from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
 import { useAuth } from "../context/AuthContext";
 import peerService from "../services/peerService";
+import FileMessageDisplay from "./FileMessageDisplay";
 // import VideoCallModal from "./VideoCallModal";
 
 const ChatWindow = ({
@@ -20,12 +28,14 @@ const ChatWindow = ({
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [typing, setTyping] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [typingVisible, setTypingVisible] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const readTimeoutRef = useRef(null);
   // const [videoModalOpen, setVideoModalOpen] = useState(false);
@@ -379,6 +389,48 @@ const ChatWindow = ({
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const response = await apiService.uploadFile(
+        friend._id,
+        file,
+        newMessage
+      );
+
+      if (response.status === 201) {
+        const message = response.data.message;
+        // Optimistically add message
+        setMessages((prev) => [...prev, message]);
+
+        // Notify receiver via socket with complete message object
+        if (socketService.socket && socketService.isConnected) {
+          socketService.socket.emit("file_message_sent", {
+            receiverId: friend._id,
+            message: message,
+          });
+        }
+
+        // Clear any caption
+        setNewMessage("");
+      } else {
+        alert(response.message || "Failed to upload file");
+      }
+    } catch (error) {
+      console.error("File upload error:", error);
+      alert("Failed to upload file");
+    } finally {
+      setUploading(false);
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   // Helper function to check if message is from current user
   const isCurrentUserMessage = (message) => {
     const currentUserId = user.id || user._id; // Auth context uses 'id', not '_id'
@@ -510,94 +562,103 @@ const ChatWindow = ({
                     </div>
                   )}
 
-                  {/* Message bubble */}
-                  <div
-                    className={`px-4 py-2 rounded-lg ${
-                      isCurrentUser
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"
-                    }`}
-                  >
-                    <p className="text-sm">{message.content}</p>
-                    <div className="flex items-center justify-end mt-1">
-                      <p
-                        className={`text-[10px] ${
-                          isCurrentUser
-                            ? "text-blue-100"
-                            : "text-gray-500 dark:text-gray-400"
-                        }`}
-                      >
-                        {formatTime(message.timestamp)}
-                      </p>
-                      {/* Read/Unread status for current user's messages */}
-                      {isCurrentUser && (
-                        <div className="flex items-center ml-2">
-                          {message.isRead ? (
-                            <div className="relative w-5 h-4">
-                              {/* First checkmark */}
-                              <svg
-                                className="absolute w-4 h-4 text-blue-200"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                                style={{
-                                  strokeWidth: "2px",
-                                  stroke: "currentColor",
-                                  fill: "none",
-                                }}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M5 10l3 3 7-7"
-                                  strokeWidth="2"
-                                />
-                              </svg>
-                              {/* Second overlapping checkmark */}
-                              <svg
-                                className="absolute w-4 h-4 text-blue-200"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                                style={{
-                                  left: "4px",
-                                  top: "0px",
-                                  strokeWidth: "2px",
-                                  stroke: "currentColor",
-                                  fill: "none",
-                                }}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M5 10l3 3 7-7"
-                                  strokeWidth="2.5"
-                                />
-                              </svg>
-                            </div>
-                          ) : (
-                            <div className="flex items-center">
-                              <svg
-                                className="w-4 h-4 text-blue-200"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                                style={{
-                                  strokeWidth: "2px",
-                                  stroke: "currentColor",
-                                  fill: "none",
-                                }}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M5 10l3 3 7-7"
-                                  strokeWidth="2"
-                                />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                  {/* Check if it's a file/image message */}
+                  {message.messageType === "image" ||
+                  message.messageType === "file" ? (
+                    <FileMessageDisplay
+                      message={message}
+                      isCurrentUser={isCurrentUser}
+                    />
+                  ) : (
+                    /* Message bubble */
+                    <div
+                      className={`px-4 py-2 rounded-lg ${
+                        isCurrentUser
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"
+                      }`}
+                    >
+                      <p className="text-sm">{message.content}</p>
+                      <div className="flex items-center justify-end mt-1">
+                        <p
+                          className={`text-[10px] ${
+                            isCurrentUser
+                              ? "text-blue-100"
+                              : "text-gray-500 dark:text-gray-400"
+                          }`}
+                        >
+                          {formatTime(message.timestamp)}
+                        </p>
+                        {/* Read/Unread status for current user's messages */}
+                        {isCurrentUser && (
+                          <div className="flex items-center ml-2">
+                            {message.isRead ? (
+                              <div className="relative w-5 h-4">
+                                {/* First checkmark */}
+                                <svg
+                                  className="absolute w-4 h-4 text-blue-200"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                  style={{
+                                    strokeWidth: "2px",
+                                    stroke: "currentColor",
+                                    fill: "none",
+                                  }}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M5 10l3 3 7-7"
+                                    strokeWidth="2"
+                                  />
+                                </svg>
+                                {/* Second overlapping checkmark */}
+                                <svg
+                                  className="absolute w-4 h-4 text-blue-200"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                  style={{
+                                    left: "4px",
+                                    top: "0px",
+                                    strokeWidth: "2px",
+                                    stroke: "currentColor",
+                                    fill: "none",
+                                  }}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M5 10l3 3 7-7"
+                                    strokeWidth="2.5"
+                                  />
+                                </svg>
+                              </div>
+                            ) : (
+                              <div className="flex items-center">
+                                <svg
+                                  className="w-4 h-4 text-blue-200"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                  style={{
+                                    strokeWidth: "2px",
+                                    stroke: "currentColor",
+                                    fill: "none",
+                                  }}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M5 10l3 3 7-7"
+                                    strokeWidth="2"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             );
@@ -624,23 +685,57 @@ const ChatWindow = ({
       {/* Message Input */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
         <form onSubmit={handleSendMessage} className="flex items-center gap-3">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            style={{ display: "none" }}
+            onChange={handleFileSelect}
+            accept="image/*,.pdf,.doc,.docx,.txt,.zip,.mp4,.mp3,.wav"
+          />
+
+          {/* File attachment button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || loading}
+            className="p-3 bg-gray-600 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Attach file"
+          >
+            <Paperclip className="w-5 h-5" />
+          </button>
+
           <input
             ref={inputRef}
             type="text"
             value={newMessage}
             onChange={handleTyping}
-            placeholder={loading ? "Loading messages..." : "Type a message..."}
+            placeholder={
+              uploading
+                ? "Uploading file..."
+                : loading
+                ? "Loading messages..."
+                : "Type a message..."
+            }
             className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={loading}
+            disabled={loading || uploading}
           />
           <button
             type="submit"
-            disabled={!newMessage.trim() || sending || loading}
+            disabled={!newMessage.trim() || sending || loading || uploading}
             className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="w-5 h-5" />
           </button>
         </form>
+
+        {/* Upload progress indicator */}
+        {uploading && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span>Uploading file...</span>
+          </div>
+        )}
       </div>
     </div>
   );
