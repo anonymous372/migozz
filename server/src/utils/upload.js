@@ -39,7 +39,11 @@ const fileFilter = (req, file, cb) => {
     "application/zip",
     "video/mp4",
     "audio/mpeg",
+    "audio/webm",
+    "audio/ogg",
+    "audio/mp3",
     "audio/wav",
+    "audio/mp4",
   ];
 
   if (allowedTypes.includes(file.mimetype)) {

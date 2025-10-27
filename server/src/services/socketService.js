@@ -137,11 +137,15 @@ export const handleConnection = (io) => {
 
     // Handle file messages
     socket.on("file_message_sent", (data) => {
-      const { receiverId, message } = data;
-      const receiverConnection = connectedUsers.get(receiverId);
+      try {
+        const { receiverId, message } = data;
+        const receiverConnection = connectedUsers.get(receiverId);
 
-      if (receiverConnection) {
-        io.to(receiverConnection.socketId).emit("new_message", message);
+        if (receiverConnection) {
+          io.to(receiverConnection.socketId).emit("new_message", message);
+        }
+      } catch (error) {
+        console.error("File message relay error:", error);
       }
     });
 

@@ -276,8 +276,14 @@ export const uploadFile = async (req, res) => {
     }
 
     // Determine message type based on file
-    const messageType = isImage(req.file.mimetype) ? "image" : "file";
-
+    let messageType;
+    if (isImage(req.file.mimetype)) {
+      messageType = "image";
+    } else if (req.file.mimetype.startsWith("audio/")) {
+      messageType = "audio";
+    } else {
+      messageType = "file";
+    }
     // Create message with file info
     const message = await Message.create({
       sender: senderId,
@@ -285,6 +291,8 @@ export const uploadFile = async (req, res) => {
       content:
         messageType === "image"
           ? req.body.content || req.file.originalname
+          : messageType === "audio"
+          ? "Voice Note" // Default text for audio
           : req.file.originalname,
       messageType,
       fileName: req.file.originalname,

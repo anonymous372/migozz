@@ -18,7 +18,7 @@ const messageSchema = new mongoose.Schema({
   },
   messageType: {
     type: String,
-    enum: ["text", "image", "file"],
+    enum: ["text", "image", "file", "audio"],
     default: "text",
   },
   // File-specific fields (only populated if messageType is "image" or "file")

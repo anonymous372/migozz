@@ -6,6 +6,8 @@ import {
   Video,
   MoreVertical,
   Paperclip,
+  Mic,
+  StopCircle,
 } from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
@@ -33,11 +35,14 @@ const ChatWindow = ({
   const [isTyping, setIsTyping] = useState(false);
   const [typingVisible, setTypingVisible] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const readTimeoutRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   // const [videoModalOpen, setVideoModalOpen] = useState(false);
 
   // Clear UI synchronously before paint when switching chats to avoid flashing old messages
@@ -430,7 +435,82 @@ const ChatWindow = ({
       }
     }
   };
+  const handleStartRecording = async () => {
+    if (uploading || loading) return;
 
+    try {
+      // Get permission to use microphone
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Check for supported mimetype
+      const mimeType = [
+        "audio/webm;codecs=opus",
+        "audio/ogg",
+        "audio/mp4",
+      ].find((type) => MediaRecorder.isTypeSupported(type));
+
+      if (!mimeType) {
+        alert("Your browser doesn't support audio recording.");
+        return;
+      }
+
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        // Stop all audio tracks to turn off the mic icon in the browser
+        stream.getTracks().forEach((track) => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        const audioFile = new File([audioBlob], "voice-note.webm", {
+          type: mimeType,
+        });
+
+        // Now, upload this file. This logic is copied from handleFileSelect
+        setUploading(true);
+        try {
+          const response = await apiService.uploadFile(friend._id, audioFile);
+
+          if (response.status === 201) {
+            const message = response.data.message;
+            setMessages((prev) => [...prev, message]);
+
+            // Emit the socket event (which our server now handles!)
+            if (socketService.socket && socketService.isConnected) {
+              socketService.socket.emit("file_message_sent", {
+                receiverId: friend._id,
+                message: message,
+              });
+            }
+          } else {
+            alert(response.message || "Failed to send voice note");
+          }
+        } catch (error) {
+          console.error("Voice note upload error:", error);
+          alert("Failed to send voice note");
+        } finally {
+          setUploading(false);
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      alert("Could not access microphone. Please grant permission.");
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
   // Helper function to check if message is from current user
   const isCurrentUserMessage = (message) => {
     const currentUserId = user.id || user._id; // Auth context uses 'id', not '_id'
@@ -564,7 +644,8 @@ const ChatWindow = ({
 
                   {/* Check if it's a file/image message */}
                   {message.messageType === "image" ||
-                  message.messageType === "file" ? (
+                  message.messageType === "file" ||
+                  message.messageType === "audio" ? (
                     <FileMessageDisplay
                       message={message}
                       isCurrentUser={isCurrentUser}
@@ -698,7 +779,7 @@ const ChatWindow = ({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || loading}
+            disabled={uploading || loading || isRecording}
             className="p-3 bg-gray-600 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Attach file"
           >
@@ -711,7 +792,9 @@ const ChatWindow = ({
             value={newMessage}
             onChange={handleTyping}
             placeholder={
-              uploading
+              isRecording
+                ? "Recording voice note..."
+                : uploading
                 ? "Uploading file..."
                 : loading
                 ? "Loading messages..."
@@ -720,13 +803,43 @@ const ChatWindow = ({
             className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading || uploading}
           />
-          <button
-            type="submit"
-            disabled={!newMessage.trim() || sending || loading || uploading}
-            className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-5 h-5" />
-          </button>
+          {newMessage.trim() ? (
+            <button
+              type="submit"
+              disabled={
+                !newMessage.trim() ||
+                sending ||
+                loading ||
+                uploading ||
+                isRecording
+              }
+              className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          ) : isRecording ? (
+            // Show Stop button when recording
+            <button
+              type="button"
+              onClick={handleStopRecording}
+              disabled={loading || uploading}
+              className="p-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              title="Stop recording"
+            >
+              <StopCircle className="w-5 h-5" />
+            </button>
+          ) : (
+            // Show Mic button when not recording and input is empty
+            <button
+              type="button"
+              onClick={handleStartRecording}
+              disabled={loading || uploading}
+              className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              title="Record voice note"
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+          )}
         </form>
 
         {/* Upload progress indicator */}

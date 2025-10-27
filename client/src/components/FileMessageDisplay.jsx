@@ -5,15 +5,26 @@ import {
   Image as ImageIcon,
   Video,
   Eye,
+  Mic,
+  Play, // Added
+  Pause, // Added
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react"; // Added useRef, useEffect
 import { FILE_BASE_URL } from "../constants";
 import ImageModal from "./ImageModal";
 
 const FileMessageDisplay = ({ message, isCurrentUser }) => {
   const [showImageModal, setShowImageModal] = useState(false);
 
-  const getFileIcon = (mimeType) => {
+  // --- Audio Player State & Refs ---
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState("0:00");
+  const [duration, setDuration] = useState("0:00");
+  const [progress, setProgress] = useState(0);
+
+  const getFileIcon = (mimeType, messageType) => {
+    if (messageType === "audio") return Mic;
     if (mimeType?.startsWith("image/")) return ImageIcon;
     if (mimeType?.startsWith("video/")) return Video;
     if (mimeType?.includes("pdf")) return FileText;
@@ -35,28 +46,20 @@ const FileMessageDisplay = ({ message, isCurrentUser }) => {
   };
 
   const handleDownload = async (e) => {
-    e.stopPropagation(); // Prevent triggering the container click
+    e.stopPropagation();
     try {
-      // Fetch the file as a blob
       const response = await fetch(`${FILE_BASE_URL}${message.fileUrl}`);
       const blob = await response.blob();
-
-      // Create a temporary URL for the blob
       const url = window.URL.createObjectURL(blob);
-
-      // Create a temporary anchor element and trigger download
       const link = document.createElement("a");
       link.href = url;
-      link.download = message.fileName; // This sets the download filename
+      link.download = message.fileName;
       document.body.appendChild(link);
       link.click();
-
-      // Cleanup
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error downloading file:", error);
-      // Fallback to opening in new tab
       window.open(`${FILE_BASE_URL}${message.fileUrl}`, "_blank");
     }
   };
@@ -70,33 +73,18 @@ const FileMessageDisplay = ({ message, isCurrentUser }) => {
   };
 
   const handleSaveAs = async (e) => {
-    e.stopPropagation(); // Prevent triggering the container click
-
+    e.stopPropagation();
     try {
-      // --- New "Save As" Logic ---
-      // Check if the modern API is supported
       if (window.showSaveFilePicker) {
-        // 1. Fetch the file data as a blob
         const response = await fetch(`${FILE_BASE_URL}${message.fileUrl}`);
         const blob = await response.blob();
-
-        // 2. Open the "Save As" dialog
-        const options = {
+        const fileHandle = await window.showSaveFilePicker({
           suggestedName: message.fileName,
-          // You can also suggest file types, but suggestedName is usually enough
-        };
-
-        const fileHandle = await window.showSaveFilePicker(options);
-
-        // 3. Write the file to the location the user chose
+        });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);
         await writable.close();
       } else {
-        // --- Fallback for older browsers (your original logic) ---
-        console.warn(
-          "showSaveFilePicker is not supported. Using fallback download."
-        );
         const response = await fetch(`${FILE_BASE_URL}${message.fileUrl}`);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -109,21 +97,99 @@ const FileMessageDisplay = ({ message, isCurrentUser }) => {
         window.URL.revokeObjectURL(url);
       }
     } catch (error) {
-      // This error often happens if the user cancels the "Save As" dialog
-      if (error.name === "AbortError") {
-        console.log("User cancelled the save dialog.");
-      } else {
+      if (error.name !== "AbortError") {
         console.error("Error saving file:", error);
-        // Fallback to opening in new tab
         window.open(`${FILE_BASE_URL}${message.fileUrl}`, "_blank");
       }
     }
   };
 
-  const FileIcon = getFileIcon(message.fileMimeType);
+  // --- Helper to format time (e.g., 123 seconds -> "2:03") ---
+  const formatAudioTime = (timeInSeconds) => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+  };
+
+  // --- Audio Player Logic ---
+  const togglePlayPause = (e) => {
+    e.stopPropagation();
+    // Guard clause: ensure audioRef is loaded
+    if (!audioRef.current) {
+      console.error("Audio element not loaded yet.");
+      return;
+    }
+
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleSliderChange = (e) => {
+    e.stopPropagation();
+    if (!audioRef.current) return;
+    const newTime = (audioRef.current.duration / 100) * e.target.value;
+    audioRef.current.currentTime = newTime;
+    setProgress(e.target.value);
+  };
+
+  // --- Audio Event Listeners ---
+  const isAudio = message.messageType === "audio";
+
+  useEffect(() => {
+    const audio = audioRef.current; // Get the audio element
+
+    // We only attach listeners if the element *exists*
+    if (audio) {
+      const onLoadedData = () => {
+        setDuration(formatAudioTime(audio.duration));
+        setCurrentTime(formatAudioTime(audio.currentTime));
+      };
+      const onTimeUpdate = () => {
+        setCurrentTime(formatAudioTime(audio.currentTime));
+        setProgress((audio.currentTime / audio.duration) * 100);
+      };
+      const onEnded = () => {
+        setIsPlaying(false);
+        setCurrentTime("0:00");
+        setProgress(0);
+        audio.currentTime = 0; // Reset time on end
+      };
+
+      // Attach listeners
+      audio.addEventListener("loadedmetadata", onLoadedData);
+      audio.addEventListener("timeupdate", onTimeUpdate);
+      audio.addEventListener("ended", onEnded);
+
+      // Check if data is already loaded (for fast connections)
+      if (audio.readyState >= 1) {
+        onLoadedData();
+      }
+
+      // Cleanup function
+      return () => {
+        audio.removeEventListener("loadedmetadata", onLoadedData);
+        audio.removeEventListener("timeupdate", onTimeUpdate);
+        audio.removeEventListener("ended", onEnded);
+      };
+    }
+  }, [message.fileUrl, isAudio]); // Dependency array ensures this runs when the element is ready
+
+  const FileIcon = getFileIcon(message.fileMimeType, message.messageType);
   const fileCategory = getFileCategory(message.fileMimeType);
   const isImage = message.messageType === "image";
   const isVideo = fileCategory === "video";
+  // isAudio is defined above
+
+  // --- Custom CSS for the slider ---
+  const sliderStyle = {
+    background: isCurrentUser
+      ? `linear-gradient(to right, #93c5fd ${progress}%, #60a5fa ${progress}%)`
+      : `linear-gradient(to right, #9ca3af ${progress}%, #6b7280 ${progress}%)`,
+  };
 
   return (
     <div
@@ -156,7 +222,78 @@ const FileMessageDisplay = ({ message, isCurrentUser }) => {
             </div>
           )}
         </div>
+      ) : isAudio ? (
+        // --- THIS IS THE NEW AUDIO PLAYER UI ---
+        <div
+          className={`flex items-center gap-2 p-2 rounded-lg w-full max-w-[280px] ${
+            isCurrentUser
+              ? "bg-blue-600 text-white"
+              : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"
+          }`}
+        >
+          {/* Audio element is now *inside* the conditional block */}
+          <audio
+            ref={audioRef}
+            src={`${FILE_BASE_URL}${message.fileUrl}`}
+            preload="metadata"
+            className="hidden" // Hide it visually
+          />
+
+          {/* Play/Pause Button */}
+          <button
+            onClick={togglePlayPause}
+            className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+              isCurrentUser
+                ? "bg-blue-500 hover:bg-blue-400"
+                : "bg-gray-300 dark:bg-gray-500 hover:bg-gray-400 dark:hover:bg-gray-400"
+            }`}
+          >
+            {isPlaying ? (
+              <Pause
+                className={`w-5 h-5 ${
+                  isCurrentUser ? "text-white" : "text-gray-800 dark:text-white"
+                }`}
+                fill="currentColor"
+              />
+            ) : (
+              <Play
+                className={`w-5 h-5 ${
+                  isCurrentUser ? "text-white" : "text-gray-800 dark:text-white"
+                }`}
+                fill="currentColor"
+              />
+            )}
+          </button>
+          {/* Slider & Time */}
+          <div className="flex-1 flex flex-col justify-center gap-1">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={progress}
+              onChange={handleSliderChange}
+              style={sliderStyle}
+              className={`w-full h-2 rounded-lg appearance-none cursor-pointer range-slider ${
+                isCurrentUser ? "range-slider-blue" : "range-slider-gray"
+              }`}
+            />
+            <span
+              className={`text-xs self-end ${
+                isCurrentUser
+                  ? "text-blue-100"
+                  : "text-gray-500 dark:text-gray-400"
+              }`}
+            >
+              {duration !== "0:00"
+                ? isPlaying
+                  ? currentTime
+                  : duration
+                : "0:00"}
+            </span>
+          </div>
+        </div>
       ) : (
+        // --- This is your existing "file" block ---
         <div
           className="flex items-center gap-3 p-3 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 hover:shadow-md w-full"
           onClick={handleOpenInTab}

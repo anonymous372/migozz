@@ -112,3 +112,60 @@ body {
     0 18px 60px -18px rgba(0,0,0,0.7),
     inset 0 -1px 0 rgba(255,255,255,0.02);
 }
+
+
+/* --- Custom Audio Slider --- */
+.range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 5px;
+  outline: none;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.range-slider:hover {
+  opacity: 1;
+}
+
+/* --- Slider Thumb (the circle) --- */
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.range-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* --- Blue Theme (Current User) --- */
+.range-slider-blue::-webkit-slider-thumb {
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+}
+.range-slider-blue::-moz-range-thumb {
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+}
+
+/* --- Gray Theme (Friend) --- */
+.range-slider-gray {
+  background: #4b5563; /* dark:bg-gray-700 track */
+}
+.range-slider-gray::-webkit-slider-thumb {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+}
+.range-slider-gray::-moz-range-thumb {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+}
