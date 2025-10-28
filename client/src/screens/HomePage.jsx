@@ -252,8 +252,9 @@ const HomePage = () => {
     const onKeyDown = (e) => {
       if (e.key === "Escape" || e.key === "Esc") {
         // only update when a friend is actually selected
-        if (selectedFriendRef.current) {
+        if (selectedFriendRef.current || selectedRoom) {
           setSelectedFriend(null);
+          setSelectedRoom(null);
           selectedFriendRef.current = null;
         }
       }
@@ -261,7 +262,7 @@ const HomePage = () => {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [selectedRoom]);
 
   // --- Handler for selecting a room ---
   const handleRoomSelect = (room) => {
@@ -494,11 +495,6 @@ const HomePage = () => {
         {/* --- MODIFIED: Sidebar Content (Scrollable Sections) --- */}
         <div className="flex-1 min-h-0 flex flex-col">
           {/* --- Friends Section --- */}
-          {!sidebarCollapsed && (
-            <h2 className="p-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Friends
-            </h2>
-          )}
           <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar">
             <FriendsList
               friends={friends}
@@ -511,12 +507,7 @@ const HomePage = () => {
           </div>
 
           {/* --- Rooms Section --- */}
-          {!sidebarCollapsed && (
-            <h2 className="p-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-t border-gray-200 dark:border-gray-700">
-              Rooms
-            </h2>
-          )}
-          <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar border-t border-gray-200 dark:border-gray-700">
+          <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar dark:border-gray-700">
             <RoomList
               rooms={rooms}
               onRoomSelect={handleRoomSelect}
@@ -563,6 +554,7 @@ const HomePage = () => {
             sidebarCollapsed={sidebarCollapsed}
             onStartCall={handleStartCall}
             onStartAudioCall={handleStartAudioCall}
+            onRoomJoined={handleRoomJoined}
           />
         ) : selectedRoom ? (
           // --- NEW: This is where your GroupChatWindow will go ---
@@ -571,7 +563,7 @@ const HomePage = () => {
             onClose={() => setSelectedRoom(null)}
             sidebarCollapsed={sidebarCollapsed}
           />
-        ) : (
+        ) : false ? (
           // --- MODIFIED: Welcome Screen ---
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -598,6 +590,47 @@ const HomePage = () => {
                 >
                   <LogIn className="w-5 h-5" />
                   Join Room
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="flex flex-col items-center max-w-lg w-full text-center p-8">
+              {/* 1. Larger, lighter icon */}
+              <MessageCircle
+                className="w-24 h-24 text-gray-300 dark:text-gray-700 mb-6"
+                strokeWidth={1.5}
+              />
+
+              {/* 2. Bigger Title */}
+              <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">
+                Welcome to Migozz
+              </h2>
+
+              {/* 3. Bigger, clearer subtitle */}
+              <p className="text-lg text-gray-500 dark:text-gray-400 mb-10">
+                Select a friend or join a room to start chatting
+              </p>
+
+              {/* 4. Larger, responsive "Call to Action" buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
+                {/* Primary Action: Create Room */}
+                <button
+                  onClick={() => setShowCreateRoomModal(true)}
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-blue-500/30"
+                >
+                  <PlusSquare className="w-5 h-5" />
+                  <span className="text-base font-medium">Create Room</span>
+                </button>
+
+                {/* Secondary Action: Join Room */}
+                <button
+                  onClick={() => setShowJoinRoomModal(true)}
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-50 transition-all duration-200 transform hover:scale-105 shadow-lg dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:hover:bg-gray-600 hover:shadow-gray-500/10"
+                >
+                  <LogIn className="w-5 h-5" />
+                  <span className="text-base font-medium">Join Room</span>
                 </button>
               </div>
             </div>

@@ -8,6 +8,8 @@ import {
   Mic,
   StopCircle,
   Users,
+  Link,
+  Check,
 } from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
@@ -34,6 +36,7 @@ const GroupChatWindow = ({
   // 2. TYPING: state to hold typing users
   const [typingUsers, setTypingUsers] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -203,6 +206,12 @@ const GroupChatWindow = ({
     }, 1500);
   };
 
+  const handleCopyInviteCode = () => {
+    navigator.clipboard.writeText(room.roomCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000); // Reset icon after 2 seconds
+  };
+
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -338,7 +347,7 @@ const GroupChatWindow = ({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* 17. HEADER: Show room info */}
-      <div className="h-16 px-4 ... flex items-center justify-between ...">
+      <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
             <Users className="w-5 h-5 text-gray-700 dark:text-gray-300" />
@@ -353,15 +362,26 @@ const GroupChatWindow = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Removed call buttons. Group calls are a separate feature. */}
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
-            <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <button
+            onClick={handleCopyInviteCode}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+            title="Copy Invite Code"
+          >
+            {copied ? (
+              <Check className="w-5 h-5 text-green-500" />
+            ) : (
+              <Link className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            )}
           </button>
+          {/* Removed call buttons. Group calls are a separate feature. */}
+          {/* <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"> */}
+          {/* <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" /> */}
+          {/* </button> */}
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 ...">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 chat-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -392,9 +412,11 @@ const GroupChatWindow = ({
                 <div className="flex flex-col max-w-xs lg:max-w-md">
                   {/* Sender name - Show if not current user and first message in block */}
                   {!isCurrentUser && showSenderName && (
-                    <div className="text-xs mb-1 text-left text-gray-600 dark:text-gray-400">
-                      {message.sender?.username ||
-                        message.senderInfo?.username ||
+                    <div className="text-xs mb-1 font-semibold mt-2 text-left text-gray-600 dark:text-gray-400">
+                      {message.sender?.username[0] +
+                        message.sender?.username.slice(1) ||
+                        message.senderInfo?.username[0] +
+                          message.senderInfo?.username.slice(1) ||
                         "Unknown User"}
                     </div>
                   )}
@@ -407,7 +429,7 @@ const GroupChatWindow = ({
                     />
                   ) : (
                     <div
-                      className={`px-4 py-2 rounded-lg ${
+                      className={`mb-1 px-4 py-2 rounded-lg ${
                         isCurrentUser
                           ? "bg-blue-600 text-white"
                           : "bg-gray-200 dark:bg-gray-700 ..."

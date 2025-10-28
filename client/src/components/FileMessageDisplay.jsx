@@ -193,7 +193,7 @@ const FileMessageDisplay = ({ message, isCurrentUser }) => {
 
   return (
     <div
-      className={`flex flex-col gap-2 max-w-xs lg:max-w-md ${
+      className={`flex mb-1 flex-col gap-2 max-w-xs lg:max-w-md ${
         isCurrentUser ? "items-end" : "items-start"
       }`}
     >

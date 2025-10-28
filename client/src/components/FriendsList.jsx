@@ -60,6 +60,9 @@ const FriendsList = ({
   if (collapsed) {
     return (
       <div className="flex flex-col h-full">
+        <h2 className="py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          Friends
+        </h2>
         {/* Collapsed Friends List */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
           <div className="p-2">
@@ -104,7 +107,10 @@ const FriendsList = ({
   return (
     <div className="flex flex-col h-full">
       {/* Search Bar */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+      <h2 className="p-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        Friends
+      </h2>
+      <div className="px-4 py-1 border-gray-200 dark:border-gray-700">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
@@ -172,9 +178,9 @@ const FriendsList = ({
       {/* Friends List */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
         <div className="p-4">
-          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
+          {/* <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
             Friends ({friends.length})
-          </h3>
+          </h3> */}
           {filteredFriends.length > 0 ? (
             <div className="space-y-1">
               {filteredFriends.map((friend) => (
@@ -214,7 +220,6 @@ const FriendsList = ({
                           : unreadCounts[friend._id]}
                       </div>
                     )}
-                    <MoreVertical className="w-4 h-4 text-gray-400" />
                   </div>
                 </div>
               ))}

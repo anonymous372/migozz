@@ -8,6 +8,7 @@ import {
   Paperclip,
   Mic,
   StopCircle,
+  LogIn,
 } from "lucide-react";
 import apiService from "../services/api";
 import socketService from "../services/socket";
@@ -23,6 +24,7 @@ const ChatWindow = ({
   sidebarCollapsed = false,
   onStartCall,
   onStartAudioCall,
+  onRoomJoined,
 }) => {
   const { user } = useAuth();
 
@@ -44,6 +46,8 @@ const ChatWindow = ({
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   // const [videoModalOpen, setVideoModalOpen] = useState(false);
+
+  const roomCodeRegex = /^[a-zA-Z0-9_-]{8}$/;
 
   // Clear UI synchronously before paint when switching chats to avoid flashing old messages
   useLayoutEffect(() => {
@@ -394,6 +398,24 @@ const ChatWindow = ({
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  const handleJoinClick = async (roomCode) => {
+    try {
+      const response = await apiService.joinRoom(roomCode);
+      if (response.status === 200 || response.status === 201) {
+        alert(`Successfully joined room!`);
+        // Use the callback to add the room to the sidebar
+        if (onRoomJoined) {
+          onRoomJoined(response.data.room);
+        }
+      } else {
+        alert(response.message || "Failed to join room");
+      }
+    } catch (error) {
+      console.error("Join room error:", error);
+      alert("Failed to join room");
+    }
+  };
+
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -592,9 +614,9 @@ const ChatWindow = ({
             <Video className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
 
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+          {/* <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
             <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -650,6 +672,38 @@ const ChatWindow = ({
                       message={message}
                       isCurrentUser={isCurrentUser}
                     />
+                  ) : // Check if this text message is an invite code
+                  roomCodeRegex.test(message.content) ? (
+                    // RENDER INVITE BUBBLE
+                    <div
+                      className={`px-4 py-3 rounded-lg flex flex-col items-center gap-3 ${
+                        isCurrentUser
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold">
+                        {isCurrentUser
+                          ? `Invited ${friend.username} to join a room`
+                          : `${friend.username} is inviting you to join a room`}
+                      </p>
+                      {/* We only show the Join button if you're NOT the sender */}
+                      {!isCurrentUser && (
+                        <button
+                          onClick={() => handleJoinClick(message.content)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                        >
+                          <LogIn className="w-5 h-5" />
+                          Join Room
+                        </button>
+                      )}
+                      {/* We show this if YOU sent it */}
+                      {isCurrentUser && (
+                        <p className="text-xs text-blue-100 dark:text-gray-400">
+                          (Invite sent)
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     /* Message bubble */
                     <div
