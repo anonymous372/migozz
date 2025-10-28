@@ -3,6 +3,7 @@ import {
   Send,
   ArrowLeft,
   Video,
+  Phone,
   MoreVertical,
   Paperclip,
   Mic,
@@ -23,6 +24,7 @@ const GroupChatWindow = ({
   sidebarCollapsed = false,
   // onStartCall, // Group calls are a future feature
   // onStartAudioCall,
+  handleStartGroupCall,
 }) => {
   const { user } = useAuth();
 
@@ -349,14 +351,12 @@ const GroupChatWindow = ({
       {/* 17. HEADER: Show room info */}
       <div className="h-16 px-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-            <Users className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+          <div className="w-10 h-10 ...">
+            <Users className="w-5 h-5 ..." />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">
-              {room.name}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h3 className="font-semibold ...">{room.name}</h3>
+            <p className="text-sm ...">
               {room.members ? `${room.members.length} members` : "Group Chat"}
             </p>
           </div>
@@ -372,7 +372,23 @@ const GroupChatWindow = ({
             ) : (
               <Link className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             )}
+            </button>
+          {/* --- ADD CALL BUTTONS --- */}
+          <button
+            onClick={() => handleStartGroupCall(room, "audio")}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+            title="Start Group Audio Call"
+          >
+            <Phone className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
+          <button
+            onClick={() => handleStartGroupCall(room, "video")}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+            title="Start Group Video Call"
+          >
+            <Video className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
+          {/* --- END CALL BUTTONS --- */}
           {/* Removed call buttons. Group calls are a separate feature. */}
           {/* <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"> */}
           {/* <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" /> */}

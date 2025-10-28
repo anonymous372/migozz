@@ -368,6 +368,67 @@ class SocketService {
     }
   }
 
+  // --- Group Call Events ---
+  startGroupCall(roomId, roomName, callType) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("group_call_start", { roomId, roomName, callType });
+    }
+  }
+
+  joinGroupCall(roomId, roomName) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("group_call_join", { roomId, roomName });
+    }
+  }
+
+  leaveGroupCall(roomId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("group_call_leave", { roomId });
+    }
+  }
+
+  onGroupCallOffer(callback) {
+    if (this.socket) {
+      this.socket.on("group_call_offer", callback);
+    }
+  }
+
+  onGroupCallYouStarted(callback) {
+    if (this.socket) {
+      this.socket.on("group_call_you_started", callback);
+    }
+  }
+
+  onGroupCallYouJoined(callback) {
+    if (this.socket) {
+      this.socket.on("group_call_you_joined", callback);
+    }
+  }
+
+  onGroupCallNewMember(callback) {
+    if (this.socket) {
+      this.socket.on("group_call_new_member", callback);
+    }
+  }
+
+  onGroupCallMemberLeft(callback) {
+    if (this.socket) {
+      this.socket.on("group_call_member_left", callback);
+    }
+  }
+
+  sendTrackStateChange(roomId, trackType, isEnabled) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("group_call_track_state_changed", { roomId, trackType, isEnabled });
+    }
+  }
+
+  onTrackStateChanged(callback) {
+    if (this.socket) {
+      this.socket.on("group_call_track_state_changed", callback);
+    }
+  }
+
   // Error handling
   onError(callback) {
     if (this.socket) {

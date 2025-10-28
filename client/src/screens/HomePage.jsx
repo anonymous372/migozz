@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import FriendsList from "../components/FriendsList";
 import ChatWindow from "../components/ChatWindow";
 import FriendRequests from "../components/FriendRequests";
+import peerService from "../services/peerService";
 import {
   Users,
   MessageCircle,
@@ -30,6 +31,7 @@ import CreateRoomModal from "../components/CreateRoomModal";
 import JoinRoomModal from "../components/JoinRoomModal";
 import RoomList from "../components/RoomList";
 import GroupChatWindow from "../components/GroupChatWindow";
+import GroupCallModal from "../components/GroupCallModal";
 
 const HomePage = () => {
   const { user, logout } = useAuth();
@@ -53,6 +55,8 @@ const HomePage = () => {
   const [rooms, setRooms] = useState([]); // To store the user's joined rooms
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
+  const [activeGroupCall, setActiveGroupCall] = useState(null);
+  const [incomingGroupCall, setIncomingGroupCall] = useState(null);
 
   useEffect(() => {
     const initializeData = async () => {
@@ -212,7 +216,91 @@ const HomePage = () => {
         socketService.onAudioCallEnd(() => {
           setActiveAudioCall(null);
         });
-        // }
+
+        socketService.onGroupCallOffer((data) => {
+          // data: { roomId, roomName, callType, caller }
+          if (!activeCall && !activeAudioCall && !activeGroupCall) {
+            setIncomingGroupCall(data);
+          }
+        });
+
+        socketService.onGroupCallYouStarted((data) => {
+          // data: { roomId, roomName, callType, members }
+          peerService.init(user._id); // Init PeerJS
+          // setActiveGroupCall(data);
+          setActiveGroupCall({ ...data, members: [user._id] }); // Add self to members
+        });
+
+        socketService.onGroupCallYouJoined(async (data) => {
+          // data: { roomId, roomName, callType, members: [peerId1, peerId2] }
+          peerService.init(user._id); // Init PeerJS
+          const stream = await peerService.getLocalStream(data.callType);
+          setActiveGroupCall(data);
+
+          // Call all existing members
+          for (const peerId of data.members) {
+            if (peerId !== user._id) {
+              // Don't call self
+              console.log("Calling existing member:", peerId);
+              peerService.callPeer(peerId, stream);
+            }
+          }
+        });
+
+        // socketService.onGroupCallNewMember(async (data) => {
+        //   // data: { roomId, newMemberId }
+        //   if (
+        //     activeGroupCall &&
+        //     data.roomId === activeGroupCall.roomId &&
+        //     data.newMemberId !== user._id
+        //   ) {
+        //     console.log("New member joined, calling them:", data.newMemberId);
+        //     // Call the new member
+        //     const stream = peerService.localStream;
+        //     peerService.callPeer(data.newMemberId, stream);
+        //   }
+        // });
+
+        socketService.onGroupCallNewMember(async (data) => {
+          // data: { roomId, newMemberId }
+          if (data.newMemberId !== user._id) {
+            // --- FIX 1: Add new member to state ---
+            setActiveGroupCall((prev) => {
+              if (prev && data.roomId === prev.roomId) {
+                // Call the new member
+                console.log(
+                  "New member joined, calling them:",
+                  data.newMemberId
+                );
+                const stream = peerService.localStream;
+                peerService.callPeer(data.newMemberId, stream);
+                // Add to members list
+                return {
+                  ...prev,
+                  members: [...prev.members, data.newMemberId],
+                };
+              }
+              return prev;
+            });
+          }
+        });
+
+        socketService.onGroupCallMemberLeft((data) => {
+          // data: { roomId, userId }
+          // --- FIX 1: Remove member from state ---
+          setActiveGroupCall((prev) => {
+            if (prev && data.roomId === prev.roomId) {
+              console.log("Member left:", data.userId);
+              // Close peer connection (handled in modal)
+              // Remove from members list
+              return {
+                ...prev,
+                members: prev.members.filter((id) => id !== data.userId),
+              };
+            }
+            return prev;
+          });
+        });
 
         // Update online status
         // await apiService.updateOnlineStatus(true);
@@ -324,6 +412,7 @@ const HomePage = () => {
       // Notify the other user that we are ending the call
       socketService.endVideoCall(activeCall.friend._id);
     }
+    peerService.closeAllConnections();
     setActiveCall(null); // Close our own modal
   };
 
@@ -373,6 +462,7 @@ const HomePage = () => {
     if (activeAudioCall) {
       socketService.endAudioCall(activeAudioCall.friend._id);
     }
+    peerService.closeAllConnections();
     setActiveAudioCall(null);
   };
 
@@ -391,6 +481,33 @@ const HomePage = () => {
     });
     setSelectedRoom(joinedRoom); // Automatically select the joined room
     setSelectedFriend(null);
+  };
+
+  // --- 4. ADD NEW GROUP CALL HANDLERS ---
+  const handleStartGroupCall = (room, callType) => {
+    socketService.startGroupCall(room._id, room.name, callType);
+  };
+
+  const handleJoinGroupCall = () => {
+    socketService.joinGroupCall(
+      incomingGroupCall.roomId,
+      incomingGroupCall.roomName
+    );
+    setIncomingGroupCall(null);
+  };
+
+  const handleRejectGroupCall = () => {
+    setIncomingGroupCall(null);
+  };
+
+  const handleLeaveGroupCall = () => {
+    if (activeGroupCall) {
+      socketService.leaveGroupCall(activeGroupCall.roomId);
+    }
+    // --- FIX FOR BUG 2 ---
+    // Explicitly stop all streams and destroy the peer
+    peerService.closeAllConnections();
+    setActiveGroupCall(null);
   };
 
   if (loading) {
@@ -562,6 +679,7 @@ const HomePage = () => {
             room={selectedRoom}
             onClose={() => setSelectedRoom(null)}
             sidebarCollapsed={sidebarCollapsed}
+            handleStartGroupCall={handleStartGroupCall}
           />
         ) : false ? (
           // --- MODIFIED: Welcome Screen ---
@@ -687,6 +805,27 @@ const HomePage = () => {
           friend={activeAudioCall.friend}
           userId={user._id}
           isCaller={activeAudioCall.isCaller}
+        />
+      )}
+
+      {/* --- 6. ADD GROUP CALL MODALS --- */}
+      {incomingGroupCall && (
+        <IncomingCallModal
+          caller={incomingGroupCall.caller} // Re-use 1-on-1 modal
+          onAccept={handleJoinGroupCall}
+          onReject={handleRejectGroupCall}
+        />
+        // You can create a custom IncomingGroupCallModal later
+      )}
+
+      {activeGroupCall && (
+        <GroupCallModal
+          open={!!activeGroupCall}
+          callInfo={activeGroupCall}
+          onClose={handleLeaveGroupCall}
+          user={user} // Pass the current user
+          callType={activeGroupCall.callType}
+          members={activeGroupCall.members || []}
         />
       )}
 

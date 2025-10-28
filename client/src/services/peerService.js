@@ -5,12 +5,21 @@ class PeerService {
   constructor() {
     this.peer = null;
     this.localStream = null;
-    this.currentCall = null;
     this.streamCallback = null;
+    this.connections = new Map(); // Replaces this.currentCall
   }
 
+  // init() is almost the same, but the 'call' handler is different
   init(userId) {
-    if (this.peer) return;
+    // Avoid re-initializing
+    if (this.peer && !this.peer.destroyed) {
+      return;
+    }
+
+    // If peer was destroyed, set to null so it can be re-created
+    if (this.peer?.destroyed) {
+      this.peer = null;
+    }
 
     this.peer = new Peer(userId, {
       host: "localhost",
@@ -20,31 +29,78 @@ class PeerService {
     });
 
     this.peer.on("call", (call) => {
-      call.answer(this.localStream); // answer with local stream
+      // This is an incoming call. Answer it with our local stream.
+      call.answer(this.localStream);
+
       call.on("stream", (remoteStream) => {
-        if (this.streamCallback) this.streamCallback(call.peer, remoteStream);
+        // We received the remote stream
+        if (this.streamCallback) {
+          this.streamCallback(call.peer, remoteStream); // Pass peerId and stream
+        }
       });
-      this.currentCall = call;
+
+      // Store this new connection
+      this.connections.set(call.peer, call);
     });
   }
 
-  startCall(friendId) {
-    if (!this.peer || !this.localStream) return;
-    const call = this.peer.call(friendId, this.localStream);
+  // Get and store our local stream
+  async getLocalStream(callType = "video") {
+    try {
+      this.localStream = await navigator.mediaDevices.getUserMedia({
+        video: callType === "video",
+        audio: true,
+      });
+      return this.localStream;
+    } catch (error) {
+      console.error("Error getting local stream:", error);
+    }
+  }
+
+  // This function replaces 'startCall'. It just calls one peer.
+  callPeer(peerId, stream) {
+    if (!this.peer || !stream) return;
+
+    const call = this.peer.call(peerId, stream);
+
     call.on("stream", (remoteStream) => {
-      if (this.streamCallback) this.streamCallback(friendId, remoteStream);
+      if (this.streamCallback) {
+        this.streamCallback(call.peer, remoteStream);
+      }
     });
-    this.currentCall = call;
+
+    this.connections.set(call.peer, call);
   }
 
+  // This handles all incoming streams
   onStreamCallback(cb) {
     this.streamCallback = cb;
   }
 
-  closeCall() {
-    if (this.currentCall) this.currentCall.close();
-    this.currentCall = null;
-    this.localStream = null;
+  // Closes a single connection (when one user leaves)
+  closeConnection(peerId) {
+    if (this.connections.has(peerId)) {
+      this.connections.get(peerId).close();
+      this.connections.delete(peerId);
+    }
+  }
+
+  // Closes all connections and stops media (when *we* leave)
+  closeAllConnections() {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((t) => t.stop());
+      this.localStream = null;
+    }
+    for (const [peerId, connection] of this.connections) {
+      connection.close();
+    }
+    this.connections.clear();
+
+    // Destroy the peer object to be recreated on next call
+    if (this.peer) {
+      this.peer.destroy();
+      this.peer = null;
+    }
   }
 }
 

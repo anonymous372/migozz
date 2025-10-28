@@ -5,6 +5,7 @@ import Room from "../models/Room.js";
 // Store connected users
 const connectedUsers = new Map();
 const tictactoeGames = new Map();
+const activeGroupCalls = new Map();
 
 // Socket.io authentication middleware
 export const socketAuth = async (socket, next) => {
@@ -69,7 +70,6 @@ export const handleConnection = (io) => {
       console.error("Error joining user to rooms:", error);
     }
 
-
     // Handle sending messages (receiving it on server)
     socket.on("send_message", async (data) => {
       try {
@@ -128,7 +128,7 @@ export const handleConnection = (io) => {
     socket.on("send_room_message", (data) => {
       try {
         const { roomId, content, messageType, senderInfo } = data;
-        
+
         // Create message object to broadcast
         const message = {
           sender: socket.userId,
@@ -143,7 +143,6 @@ export const handleConnection = (io) => {
 
         // Emit to everyone in the room *except* the sender
         socket.to(roomId).emit("new_room_message", message);
-
       } catch (error) {
         console.error("Send room message error:", error);
       }
@@ -367,6 +366,90 @@ export const handleConnection = (io) => {
       }
     });
 
+    // --- 4. ADD GROUP CALL HANDLERS (Add this entire block) ---
+    socket.on("group_call_start", (data) => {
+      const { roomId, callType } = data;
+
+      // Set this call as active
+      activeGroupCalls.set(roomId, {
+        callType,
+        members: [{ id: socket.userId, user: socket.user }],
+      });
+
+      // Tell the caller they started the call
+      socket.emit("group_call_you_started", {
+        roomId,
+        roomName: data.roomName, // Pass name along
+        callType,
+        members: [], // No one else is in yet
+      });
+
+      // Tell everyone else in the room a call has started
+      socket.to(roomId).emit("group_call_offer", {
+        roomId,
+        roomName: data.roomName,
+        callType,
+        caller: socket.user,
+      });
+    });
+
+    socket.on("group_call_join", (data) => {
+      const { roomId } = data;
+      const call = activeGroupCalls.get(roomId);
+
+      if (!call) return; // Call doesn't exist
+
+      const existingMembers = call.members.map((m) => m.id);
+
+      // Tell the new member who is already in the call
+      socket.emit("group_call_you_joined", {
+        roomId,
+        roomName: data.roomName,
+        callType: call.callType,
+        members: existingMembers, // Tell new user to call everyone
+      });
+
+      // Tell everyone else a new member joined
+      socket.to(roomId).emit("group_call_new_member", {
+        roomId,
+        newMemberId: socket.userId,
+      });
+
+      // Add new member to the list
+      call.members.push({ id: socket.userId, user: socket.user });
+    });
+
+    socket.on("group_call_leave", (data) => {
+      const { roomId } = data;
+      const call = activeGroupCalls.get(roomId);
+
+      if (!call) return;
+
+      // Remove member from list
+      call.members = call.members.filter((m) => m.id !== socket.userId);
+
+      // Tell remaining members who left
+      socket.to(roomId).emit("group_call_member_left", {
+        roomId,
+        userId: socket.userId,
+      });
+
+      // If no one is left, end the call
+      if (call.members.length === 0) {
+        activeGroupCalls.delete(roomId);
+      }
+    });
+
+    socket.on("group_call_track_state_changed", (data) => {
+      const { roomId, trackType, isEnabled } = data;
+      // Broadcast to others in the room
+      socket.to(roomId).emit("group_call_track_state_changed", {
+        peerId: socket.userId, // Tell others *who* changed state
+        trackType, // 'audio' or 'video'
+        isEnabled, // true or false
+      });
+    });
+
     socket.on("tictactoe_create_game", () => {
       try {
         // Generate a random, simple room code
@@ -517,6 +600,29 @@ export const handleConnection = (io) => {
         userId: socket.userId,
         username: socket.user.username,
       });
+
+      for (const [roomId, call] of activeGroupCalls.entries()) {
+        const memberIndex = call.members.findIndex(
+          (m) => m.id === socket.userId
+        );
+
+        if (memberIndex !== -1) {
+          // Remove the member
+          call.members.splice(memberIndex, 1);
+
+          // Notify remaining members
+          socket.to(roomId).emit("group_call_member_left", {
+            roomId,
+            userId: socket.userId,
+          });
+
+          // If call is now empty, delete it
+          if (call.members.length === 0) {
+            activeGroupCalls.delete(roomId);
+          }
+          break; // User can only be in one call at a time
+        }
+      }
 
       for (const [roomCode, game] of tictactoeGames.entries()) {
         const playerInGame = game.players.find((p) => p.id === socket.userId);

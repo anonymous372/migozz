@@ -9,28 +9,68 @@ const VideoCallModal = ({ open, onClose, friend, userId, isCaller }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
+  // useEffect(() => {
+  //   if (!open) return;
+
+  //   setIsMuted(false);
+  //   setIsVideoOff(false);
+
+  //   const startCall = async () => {
+  //     peerService.init(userId);
+
+  //     // get local video/audio
+  //     const stream = await navigator.mediaDevices.getUserMedia({
+  //       video: true,
+  //       audio: true,
+  //     });
+  //     peerService.localStream = stream;
+
+  //     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+
+  //     // start call to friend
+  //     peerService.startCall(friend._id);
+
+  //     // handle remote stream
+  //     peerService.onStreamCallback((peerId, remoteStream) => {
+  //       if (remoteVideoRef.current)
+  //         remoteVideoRef.current.srcObject = remoteStream;
+  //     });
+  //   };
+
+  //   startCall();
+
+  //   return () => {
+  //     if (peerService.localStream)
+  //       peerService.localStream.getTracks().forEach((t) => t.stop());
+  //     peerService.closeCall();
+  //   };
+  // }, [open, friend, userId, isCaller]);
+
   useEffect(() => {
     if (!open) return;
 
+    // Reset states on new call
     setIsMuted(false);
     setIsVideoOff(false);
 
     const startCall = async () => {
+      // 1. Init PeerJS
       peerService.init(userId);
 
-      // get local video/audio
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      peerService.localStream = stream;
+      // 2. Get local stream from service
+      const stream = await peerService.getLocalStream("video");
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
 
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      // 3. Call peer if we are the caller
+      if (isCaller) {
+        // --- THIS IS THE FIX ---
+        // Was: peerService.startCall(friend._id);
+        peerService.callPeer(friend._id, stream);
+      }
 
-      // start call to friend
-      peerService.startCall(friend._id);
-
-      // handle remote stream
+      // 4. Handle incoming stream
       peerService.onStreamCallback((peerId, remoteStream) => {
         if (remoteVideoRef.current)
           remoteVideoRef.current.srcObject = remoteStream;
@@ -40,9 +80,9 @@ const VideoCallModal = ({ open, onClose, friend, userId, isCaller }) => {
     startCall();
 
     return () => {
-      if (peerService.localStream)
-        peerService.localStream.getTracks().forEach((t) => t.stop());
-      peerService.closeCall();
+      // 5. Use the new cleanup function
+      // (This is handled by onClose, but good for safety)
+      // peerService.closeAllConnections();
     };
   }, [open, friend, userId, isCaller]);
 
@@ -67,6 +107,7 @@ const VideoCallModal = ({ open, onClose, friend, userId, isCaller }) => {
   };
 
   const handleLeaveCall = () => {
+    peerService.closeAllConnections(); // Explicitly close connections
     onClose();
   };
 
