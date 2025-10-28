@@ -2,16 +2,112 @@ import { API_RESPONSE } from "../utils/constants.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import ChatRoom from "../models/ChatRoom.js";
+import Room from "../models/Room.js";
 import { isImage } from "../utils/upload.js";
 import path from "path";
 
 // Send message
 export const sendMessage = async (req, res) => {
   try {
-    const { receiverId, content, messageType = "text" } = req.body;
+    const { receiverId, roomId, content, messageType = "text" } = req.body;
     const senderId = req.user.id;
 
-    if (senderId === receiverId) {
+    let message;
+    if (roomId) {
+      // --- Room Message Logic ---
+      const room = await Room.findById(roomId);
+      if (!room) {
+        return res
+          .status(404)
+          .json(API_RESPONSE(404, null, "Not Found", "Room not found"));
+      }
+      if (!room.members.includes(senderId)) {
+        return res
+          .status(403)
+          .json(
+            API_RESPONSE(
+              403,
+              null,
+              "Forbidden",
+              "You are not a member of this room"
+            )
+          );
+      }
+
+      message = await Message.create({
+        sender: senderId,
+        room: roomId,
+        content,
+        messageType,
+      });
+
+      // Update room last activity
+      room.lastMessage = message._id;
+      room.lastActivity = new Date();
+      await room.save();
+    } else if (receiverId) {
+      /// start
+      if (senderId === receiverId) {
+        return res
+          .status(400)
+          .json(
+            API_RESPONSE(
+              400,
+              null,
+              "Validation Error",
+              "Cannot send message to yourself"
+            )
+          );
+      }
+
+      // Check if receiver exists
+      const receiver = await User.findById(receiverId);
+      if (!receiver) {
+        return res
+          .status(404)
+          .json(API_RESPONSE(404, null, "Not Found", "Receiver not found"));
+      }
+
+      // Check if users are friends
+      const sender = await User.findById(senderId);
+      if (!sender.friends.includes(receiverId)) {
+        return res
+          .status(403)
+          .json(
+            API_RESPONSE(
+              403,
+              null,
+              "Forbidden",
+              "You can only message your friends"
+            )
+          );
+      }
+
+      // Create message
+      message = await Message.create({
+        sender: senderId,
+        receiver: receiverId,
+        content,
+        messageType,
+      });
+
+      // Find or create chat room
+      let chatRoom = await ChatRoom.findOne({
+        participants: { $all: [senderId, receiverId] },
+      });
+
+      if (!chatRoom) {
+        chatRoom = await ChatRoom.create({
+          participants: [senderId, receiverId],
+          lastMessage: message._id,
+          lastActivity: new Date(),
+        });
+      } else {
+        chatRoom.lastMessage = message._id;
+        chatRoom.lastActivity = new Date();
+        await chatRoom.save();
+      }
+    } else {
       return res
         .status(400)
         .json(
@@ -19,59 +115,10 @@ export const sendMessage = async (req, res) => {
             400,
             null,
             "Validation Error",
-            "Cannot send message to yourself"
+            "Message must have a receiverId or roomId"
           )
         );
     }
-
-    // Check if receiver exists
-    const receiver = await User.findById(receiverId);
-    if (!receiver) {
-      return res
-        .status(404)
-        .json(API_RESPONSE(404, null, "Not Found", "Receiver not found"));
-    }
-
-    // Check if users are friends
-    const sender = await User.findById(senderId);
-    if (!sender.friends.includes(receiverId)) {
-      return res
-        .status(403)
-        .json(
-          API_RESPONSE(
-            403,
-            null,
-            "Forbidden",
-            "You can only message your friends"
-          )
-        );
-    }
-
-    // Create message
-    const message = await Message.create({
-      sender: senderId,
-      receiver: receiverId,
-      content,
-      messageType,
-    });
-
-    // Find or create chat room
-    let chatRoom = await ChatRoom.findOne({
-      participants: { $all: [senderId, receiverId] },
-    });
-
-    if (!chatRoom) {
-      chatRoom = await ChatRoom.create({
-        participants: [senderId, receiverId],
-        lastMessage: message._id,
-        lastActivity: new Date(),
-      });
-    } else {
-      chatRoom.lastMessage = message._id;
-      chatRoom.lastActivity = new Date();
-      await chatRoom.save();
-    }
-
     // Populate sender info for response
     await message.populate("sender", "username avatar");
 
@@ -88,6 +135,64 @@ export const sendMessage = async (req, res) => {
           null,
           "Internal Server Error",
           "Failed to send message"
+        )
+      );
+  }
+};
+
+export const getRoomMessages = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const userId = req.user._id;
+    const { page = 1, limit = 50 } = req.query;
+
+    // Check if user is a member of the room
+    const room = await Room.findById(roomId);
+    if (!room || !room.members.includes(userId)) {
+      return res
+        .status(403)
+        .json(
+          API_RESPONSE(
+            403,
+            null,
+            "Forbidden",
+            "You are not a member of this room"
+          )
+        );
+    }
+
+    const skip = (page - 1) * limit;
+
+    const messages = await Message.find({ room: roomId })
+      .populate("sender", "username avatar")
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // You can add logic here to mark messages as "read" for the user,
+    // but room read-receipts are much more complex than 1-on-1.
+    // For now, we'll skip it.
+
+    res
+      .status(200)
+      .json(
+        API_RESPONSE(
+          200,
+          { messages: messages.reverse() },
+          null,
+          "Room messages retrieved successfully"
+        )
+      );
+  } catch (error) {
+    console.error("Get room messages error:", error);
+    res
+      .status(500)
+      .json(
+        API_RESPONSE(
+          500,
+          null,
+          "Internal Server Error",
+          "Failed to get room messages"
         )
       );
   }
@@ -236,10 +341,124 @@ export const uploadFile = async (req, res) => {
         .json(API_RESPONSE(400, null, "Validation Error", "No file uploaded"));
     }
 
-    const { receiverId } = req.body;
+    const { receiverId, roomId } = req.body;
     const senderId = req.user.id;
+    // Determine message type
+    let messageType;
+    if (isImage(req.file.mimetype)) messageType = "image";
+    else if (req.file.mimetype.startsWith("audio/")) messageType = "audio";
+    else messageType = "file";
 
-    if (senderId === receiverId) {
+    const fileUrl = `/uploads/${req.file.filename}`;
+    let message;
+
+    if (roomId) {
+      // --- Room File Message Logic ---
+      const room = await Room.findById(roomId);
+      if (!room) {
+        return res
+          .status(404)
+          .json(API_RESPONSE(404, null, "Not Found", "Room not found"));
+      }
+      if (!room.members.includes(senderId)) {
+        return res
+          .status(403)
+          .json(
+            API_RESPONSE(
+              403,
+              null,
+              "Forbidden",
+              "You are not a member of this room"
+            )
+          );
+      }
+
+      message = await Message.create({
+        sender: senderId,
+        room: roomId,
+        content: req.body.content || req.file.originalname,
+        messageType,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        fileMimeType: req.file.mimetype,
+        fileUrl: fileUrl,
+      });
+
+      room.lastMessage = message._id;
+      room.lastActivity = new Date();
+      await room.save();
+    } else if (receiverId) {
+      if (senderId === receiverId) {
+        return res
+          .status(400)
+          .json(
+            API_RESPONSE(
+              400,
+              null,
+              "Validation Error",
+              "Cannot send message to yourself"
+            )
+          );
+      }
+
+      // Check if receiver exists
+      const receiver = await User.findById(receiverId);
+      if (!receiver) {
+        return res
+          .status(404)
+          .json(API_RESPONSE(404, null, "Not Found", "Receiver not found"));
+      }
+
+      // Check if users are friends
+      const sender = await User.findById(senderId);
+      if (!sender.friends.includes(receiverId)) {
+        return res
+          .status(403)
+          .json(
+            API_RESPONSE(
+              403,
+              null,
+              "Forbidden",
+              "You can only send files to your friends"
+            )
+          );
+      }
+
+      // Create message with file info
+      message = await Message.create({
+        sender: senderId,
+        receiver: receiverId,
+        content:
+          messageType === "image"
+            ? req.body.content || req.file.originalname
+            : messageType === "audio"
+            ? "Voice Note" // Default text for audio
+            : req.file.originalname,
+        messageType,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        fileMimeType: req.file.mimetype,
+        // Store relative path to serve files
+        fileUrl: `/uploads/${req.file.filename}`,
+      });
+
+      // Find or create chat room
+      let chatRoom = await ChatRoom.findOne({
+        participants: { $all: [senderId, receiverId] },
+      });
+
+      if (!chatRoom) {
+        chatRoom = await ChatRoom.create({
+          participants: [senderId, receiverId],
+          lastMessage: message._id,
+          lastActivity: new Date(),
+        });
+      } else {
+        chatRoom.lastMessage = message._id;
+        chatRoom.lastActivity = new Date();
+        await chatRoom.save();
+      }
+    } else {
       return res
         .status(400)
         .json(
@@ -247,78 +466,10 @@ export const uploadFile = async (req, res) => {
             400,
             null,
             "Validation Error",
-            "Cannot send message to yourself"
+            "File must have a receiverId or roomId"
           )
         );
     }
-
-    // Check if receiver exists
-    const receiver = await User.findById(receiverId);
-    if (!receiver) {
-      return res
-        .status(404)
-        .json(API_RESPONSE(404, null, "Not Found", "Receiver not found"));
-    }
-
-    // Check if users are friends
-    const sender = await User.findById(senderId);
-    if (!sender.friends.includes(receiverId)) {
-      return res
-        .status(403)
-        .json(
-          API_RESPONSE(
-            403,
-            null,
-            "Forbidden",
-            "You can only send files to your friends"
-          )
-        );
-    }
-
-    // Determine message type based on file
-    let messageType;
-    if (isImage(req.file.mimetype)) {
-      messageType = "image";
-    } else if (req.file.mimetype.startsWith("audio/")) {
-      messageType = "audio";
-    } else {
-      messageType = "file";
-    }
-    // Create message with file info
-    const message = await Message.create({
-      sender: senderId,
-      receiver: receiverId,
-      content:
-        messageType === "image"
-          ? req.body.content || req.file.originalname
-          : messageType === "audio"
-          ? "Voice Note" // Default text for audio
-          : req.file.originalname,
-      messageType,
-      fileName: req.file.originalname,
-      fileSize: req.file.size,
-      fileMimeType: req.file.mimetype,
-      // Store relative path to serve files
-      fileUrl: `/uploads/${req.file.filename}`,
-    });
-
-    // Find or create chat room
-    let chatRoom = await ChatRoom.findOne({
-      participants: { $all: [senderId, receiverId] },
-    });
-
-    if (!chatRoom) {
-      chatRoom = await ChatRoom.create({
-        participants: [senderId, receiverId],
-        lastMessage: message._id,
-        lastActivity: new Date(),
-      });
-    } else {
-      chatRoom.lastMessage = message._id;
-      chatRoom.lastActivity = new Date();
-      await chatRoom.save();
-    }
-
     // Populate sender info for response
     await message.populate("sender", "username avatar");
 

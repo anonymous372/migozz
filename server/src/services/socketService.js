@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Room from "../models/Room.js";
 
 // Store connected users
 const connectedUsers = new Map();
@@ -31,7 +32,7 @@ export const socketAuth = async (socket, next) => {
 
 // Handle socket connections
 export const handleConnection = (io) => {
-  return (socket) => {
+  return async (socket) => {
     console.log(`User ${socket.user.username} connected`);
 
     // Store user connection
@@ -56,6 +57,18 @@ export const handleConnection = (io) => {
       username: socket.user.username,
       avatar: socket.user.avatar,
     });
+
+    // --- JOIN USER TO ALL THEIR ROOMS ---
+    try {
+      const userRooms = await Room.find({ members: socket.userId });
+      userRooms.forEach((room) => {
+        socket.join(room._id.toString());
+        console.log(`User ${socket.user.username} joined room: ${room.name}`);
+      });
+    } catch (error) {
+      console.error("Error joining user to rooms:", error);
+    }
+
 
     // Handle sending messages (receiving it on server)
     socket.on("send_message", async (data) => {
@@ -111,6 +124,31 @@ export const handleConnection = (io) => {
       }
     });
 
+    // --- Handle Room Messages ---
+    socket.on("send_room_message", (data) => {
+      try {
+        const { roomId, content, messageType, senderInfo } = data;
+        
+        // Create message object to broadcast
+        const message = {
+          sender: socket.userId,
+          room: roomId,
+          content,
+          messageType,
+          timestamp: new Date(),
+          senderInfo: senderInfo,
+          // Note: The API call already saved this to the DB.
+          // This socket handler is just for real-time relay.
+        };
+
+        // Emit to everyone in the room *except* the sender
+        socket.to(roomId).emit("new_room_message", message);
+
+      } catch (error) {
+        console.error("Send room message error:", error);
+      }
+    });
+
     // Handle typing indicators
     socket.on("typing_start", (data) => {
       const { receiverId } = data;
@@ -135,6 +173,23 @@ export const handleConnection = (io) => {
       }
     });
 
+    socket.on("room_typing_start", (data) => {
+      const { roomId } = data;
+      socket.to(roomId).emit("user_typing_in_room", {
+        roomId,
+        userId: socket.userId,
+        username: socket.user.username,
+      });
+    });
+
+    socket.on("room_typing_stop", (data) => {
+      const { roomId } = data;
+      socket.to(roomId).emit("user_stop_typing_in_room", {
+        roomId,
+        userId: socket.userId,
+      });
+    });
+
     // Handle file messages
     socket.on("file_message_sent", (data) => {
       try {
@@ -146,6 +201,16 @@ export const handleConnection = (io) => {
         }
       } catch (error) {
         console.error("File message relay error:", error);
+      }
+    });
+
+    socket.on("room_file_message_sent", (data) => {
+      try {
+        const { roomId, message } = data;
+        // Emit the full message object (from DB) to others in the room
+        socket.to(roomId).emit("new_room_message", message);
+      } catch (error) {
+        console.error("Room file message relay error:", error);
       }
     });
 

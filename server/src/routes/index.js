@@ -4,6 +4,7 @@ import { authenticateToken } from "../middlewares/authMiddleware.js";
 import friendRoutes from "./friends.js";
 import messageRoutes from "./messages.js";
 import userRoutes from "./users.js";
+import roomRoutes from "./rooms.js";
 
 const router = express.Router();
 
@@ -31,5 +32,6 @@ router.get("/profile", authenticateToken, (req, res) => {
 router.use("/friends", friendRoutes);
 router.use("/messages", messageRoutes);
 router.use("/users", userRoutes);
+router.use("/rooms", roomRoutes);
 
 export default router;

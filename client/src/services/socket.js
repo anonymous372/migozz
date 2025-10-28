@@ -69,6 +69,29 @@ class SocketService {
     }
   }
 
+  sendRoomMessage(roomId, content, messageType = "text", senderInfo) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("send_room_message", {
+        roomId,
+        content,
+        messageType,
+        senderInfo,
+      });
+    }
+  }
+
+  onNewRoomMessage(callback) {
+    if (this.socket) {
+      this.socket.on("new_room_message", callback);
+    }
+  }
+
+  roomFileMessageSent(roomId, message) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("room_file_message_sent", { roomId, message });
+    }
+  }
+
   // Typing events
   startTyping(receiverId) {
     if (this.socket && this.isConnected) {
@@ -91,6 +114,31 @@ class SocketService {
   onUserStopTyping(callback) {
     if (this.socket) {
       this.socket.on("user_stop_typing", callback);
+    }
+  }
+
+  // --- Room Typing Events ---
+  startRoomTyping(roomId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("room_typing_start", { roomId });
+    }
+  }
+
+  stopRoomTyping(roomId) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("room_typing_stop", { roomId });
+    }
+  }
+
+  onUserTypingInRoom(callback) {
+    if (this.socket) {
+      this.socket.on("user_typing_in_room", callback);
+    }
+  }
+
+  onUserStopTypingInRoom(callback) {
+    if (this.socket) {
+      this.socket.on("user_stop_typing_in_room", callback);
     }
   }
 

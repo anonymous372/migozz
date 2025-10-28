@@ -118,19 +118,66 @@ class ApiService {
     return response.json();
   }
 
-  // Message endpoints
-  async sendMessage(receiverId, content, messageType = "text") {
-    const response = await fetch(`${API_BASE_URL}/messages/send`, {
-      method: "POST",
+  async getRooms() {
+    const response = await fetch(`${API_BASE_URL}/rooms`, {
       headers: getAuthHeaders(),
-      body: JSON.stringify({ receiverId, content, messageType }),
     });
     return response.json();
   }
 
+  async createRoom(name) {
+    const response = await fetch(`${API_BASE_URL}/rooms/create`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name }),
+    });
+    return response.json();
+  }
+
+  async joinRoom(roomCode) {
+    const response = await fetch(`${API_BASE_URL}/rooms/join`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ roomCode }),
+    });
+    return response.json();
+  }
+
+  // Message endpoints
+  async sendMessage(receiverId, content, messageType = "text", roomId = null) {
+    // Build the payload
+    const payload = {
+      content,
+      messageType,
+    };
+
+    if (roomId) {
+      payload.roomId = roomId;
+    } else if (receiverId) {
+      payload.receiverId = receiverId;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/messages/send`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload), // Send the correct payload
+    });
+    return response.json();
+  }
   async getMessages(friendId, page = 1, limit = 50) {
+    // Note the new '/user/' part in the URL
     const response = await fetch(
-      `${API_BASE_URL}/messages/${friendId}?page=${page}&limit=${limit}`,
+      `${API_BASE_URL}/messages/user/${friendId}?page=${page}&limit=${limit}`,
+      {
+        headers: getAuthHeaders(),
+      }
+    );
+    return response.json();
+  }
+
+  async getRoomMessages(roomId, page = 1, limit = 50) {
+    const response = await fetch(
+      `${API_BASE_URL}/messages/room/${roomId}?page=${page}&limit=${limit}`,
       {
         headers: getAuthHeaders(),
       }
@@ -154,10 +201,17 @@ class ApiService {
   }
 
   // Upload file
-  async uploadFile(receiverId, file, caption = "") {
+  async uploadFile(receiverId, file, caption = "", roomId = null) {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("receiverId", receiverId);
+    // formData.append("receiverId", receiverId);
+
+    if (roomId) {
+      formData.append("roomId", roomId);
+    } else if (receiverId) {
+      formData.append("receiverId", receiverId);
+    }
+
     if (caption) formData.append("content", caption);
 
     const token = localStorage.getItem("token");

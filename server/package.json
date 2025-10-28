@@ -19,6 +19,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
+    "nanoid": "^5.1.6",
     "peer": "^1.0.2",
     "peerjs": "^1.5.5",
     "socket.io": "^4.8.1"

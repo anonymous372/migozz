@@ -8,7 +8,9 @@ import {
   MessageCircle,
   UserPlus,
   LogOut,
+  LogIn,
   Menu,
+  PlusSquare,
   X,
   UserCheck,
   Mail,
@@ -24,6 +26,10 @@ import OutgoingCallModal from "../components/OutgoingCallModal";
 import AudioCallModal from "../components/AudioCallModal";
 import IncomingAudioCallModal from "../components/IncomingAudioCallModal";
 import OutgoingAudioCallModal from "../components/OutgoingAudioCallModal";
+import CreateRoomModal from "../components/CreateRoomModal";
+import JoinRoomModal from "../components/JoinRoomModal";
+import RoomList from "../components/RoomList";
+import GroupChatWindow from "../components/GroupChatWindow";
 
 const HomePage = () => {
   const { user, logout } = useAuth();
@@ -43,6 +49,10 @@ const HomePage = () => {
   const [incomingAudioCall, setIncomingAudioCall] = useState(null);
   const [activeAudioCall, setActiveAudioCall] = useState(null);
   const [outgoingAudioCall, setOutgoingAudioCall] = useState(null);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [rooms, setRooms] = useState([]); // To store the user's joined rooms
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
+  const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
 
   useEffect(() => {
     const initializeData = async () => {
@@ -71,10 +81,11 @@ const HomePage = () => {
           setFriendRequests(requestsResponse.data.friendRequests);
         }
 
-        // Connect to socket
-        // const token = localStorage.getItem("token");
-        // if (token) {
-        // socketService.connect(token);
+        // --- Fetch user's rooms ---
+        const roomsResponse = await apiService.getRooms();
+        if (roomsResponse.status === 200) {
+          setRooms(roomsResponse.data.rooms);
+        }
 
         // Set up socket listeners
         socketService.onUserOnline((data) => {
@@ -223,6 +234,7 @@ const HomePage = () => {
 
   const handleFriendSelect = (friend) => {
     setSelectedFriend(friend);
+    setSelectedRoom(null);
     selectedFriendRef.current = friend;
 
     // Clear unread count for this friend immediately when opening chat
@@ -250,6 +262,13 @@ const HomePage = () => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  // --- Handler for selecting a room ---
+  const handleRoomSelect = (room) => {
+    setSelectedRoom(room);
+    setSelectedFriend(null); // <-- Deselect friend
+    // Logic to clear unread messages for the room will go here
+  };
 
   const handleUnreadUpdate = (friendId, count) => {
     setUnreadCounts((prev) => ({
@@ -356,6 +375,23 @@ const HomePage = () => {
     setActiveAudioCall(null);
   };
 
+  const handleRoomCreated = (newRoom) => {
+    setRooms((prevRooms) => [newRoom, ...prevRooms]);
+    setSelectedRoom(newRoom); // Automatically select the new room
+    setSelectedFriend(null);
+  };
+
+  const handleRoomJoined = (joinedRoom) => {
+    // Check if user is already in the room list to avoid duplicates
+    setRooms((prevRooms) => {
+      const alreadyExists = prevRooms.find((r) => r._id === joinedRoom._id);
+      if (alreadyExists) return prevRooms;
+      return [joinedRoom, ...prevRooms];
+    });
+    setSelectedRoom(joinedRoom); // Automatically select the joined room
+    setSelectedFriend(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-56px)] bg-gray-100 dark:bg-gray-900">
@@ -444,7 +480,7 @@ const HomePage = () => {
         )}
 
         {/* Friends List */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* <div className="flex-1 min-h-0 overflow-y-auto">
           <FriendsList
             friends={friends}
             onlineFriends={onlineFriends}
@@ -453,29 +489,46 @@ const HomePage = () => {
             unreadCounts={unreadCounts}
             collapsed={sidebarCollapsed}
           />
-        </div>
-
-        {/* Logout Button at Bottom */}
-        {/* <div className="p-4 flex-shrink-0">
-          <button
-            onClick={handleLogout}
-            className={`w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
-              sidebarCollapsed ? "justify-center" : "justify-start"
-            }`}
-            title="Logout"
-          >
-            <LogOut className="w-5 h-5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
-            {!sidebarCollapsed && (
-              <span className="text-gray-600 dark:text-gray-400 font-medium">
-                Logout
-              </span>
-            )}
-          </button>
         </div> */}
+
+        {/* --- MODIFIED: Sidebar Content (Scrollable Sections) --- */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* --- Friends Section --- */}
+          {!sidebarCollapsed && (
+            <h2 className="p-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Friends
+            </h2>
+          )}
+          <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar">
+            <FriendsList
+              friends={friends}
+              onlineFriends={onlineFriends}
+              onFriendSelect={handleFriendSelect}
+              selectedFriend={selectedFriend}
+              unreadCounts={unreadCounts}
+              collapsed={sidebarCollapsed}
+            />
+          </div>
+
+          {/* --- Rooms Section --- */}
+          {!sidebarCollapsed && (
+            <h2 className="p-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider border-t border-gray-200 dark:border-gray-700">
+              Rooms
+            </h2>
+          )}
+          <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar border-t border-gray-200 dark:border-gray-700">
+            <RoomList
+              rooms={rooms}
+              onRoomSelect={handleRoomSelect}
+              selectedRoom={selectedRoom}
+              collapsed={sidebarCollapsed}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {selectedFriend ? (
           <ChatWindow
             friend={selectedFriend}
@@ -498,7 +551,60 @@ const HomePage = () => {
             </div>
           </div>
         )}
+      </div> */}
+
+      {/*  Updated Main Chat Area */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {selectedFriend ? (
+          <ChatWindow
+            friend={selectedFriend}
+            onClose={() => setSelectedFriend(null)}
+            onUnreadUpdate={handleUnreadUpdate}
+            sidebarCollapsed={sidebarCollapsed}
+            onStartCall={handleStartCall}
+            onStartAudioCall={handleStartAudioCall}
+          />
+        ) : selectedRoom ? (
+          // --- NEW: This is where your GroupChatWindow will go ---
+          <GroupChatWindow
+            room={selectedRoom}
+            onClose={() => setSelectedRoom(null)}
+            sidebarCollapsed={sidebarCollapsed}
+          />
+        ) : (
+          // --- MODIFIED: Welcome Screen ---
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <MessageCircle className="w-16 h-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                Welcome to Migozz
+              </h2>
+              <p className="text-gray-500 dark:text-gray-500 mb-6">
+                Select a friend to start chatting...
+                <br />
+                ...or create and join a room.
+              </p>
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => setShowCreateRoomModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  <PlusSquare className="w-5 h-5" />
+                  Create Room
+                </button>
+                <button
+                  onClick={() => setShowJoinRoomModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                >
+                  <LogIn className="w-5 h-5" />
+                  Join Room
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
       {/* Add Friend Modal */}
       <AddFriendModal
         open={showAddFriendModal}
@@ -550,6 +656,18 @@ const HomePage = () => {
           isCaller={activeAudioCall.isCaller}
         />
       )}
+
+      {/* Room Modals */}
+      <CreateRoomModal
+        open={showCreateRoomModal}
+        onClose={() => setShowCreateRoomModal(false)}
+        onRoomCreated={handleRoomCreated}
+      />
+      <JoinRoomModal
+        open={showJoinRoomModal}
+        onClose={() => setShowJoinRoomModal(false)}
+        onRoomJoined={handleRoomJoined}
+      />
     </div>
   );
 };
