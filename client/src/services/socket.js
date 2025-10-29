@@ -357,6 +357,31 @@ class SocketService {
     }
   }
 
+  requestTicTacToeRematch(roomCode) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("tictactoe_request_rematch", { roomCode });
+    }
+  }
+
+  acceptTicTacToeRematch(roomCode) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("tictactoe_accept_rematch", { roomCode });
+    }
+  }
+
+  // --- Add these to your Tic Tac Toe Listeners ---
+  onTicTacToeRematchRequested(callback) {
+    if (this.socket) {
+      this.socket.on("tictactoe_rematch_requested", callback);
+    }
+  }
+
+  onTicTacToeGameReset(callback) {
+    if (this.socket) {
+      this.socket.on("tictactoe_game_reset", callback);
+    }
+  }
+
   // Helper to remove all game listeners
   removeAllTicTacToeListeners() {
     if (this.socket) {
@@ -365,6 +390,8 @@ class SocketService {
       this.socket.off("tictactoe_update_state");
       this.socket.off("tictactoe_opponent_left");
       this.socket.off("tictactoe_error");
+      this.socket.off("tictactoe_rematch_requested");
+      this.socket.off("tictactoe_game_reset");
     }
   }
 
@@ -419,7 +446,11 @@ class SocketService {
 
   sendTrackStateChange(roomId, trackType, isEnabled) {
     if (this.socket && this.isConnected) {
-      this.socket.emit("group_call_track_state_changed", { roomId, trackType, isEnabled });
+      this.socket.emit("group_call_track_state_changed", {
+        roomId,
+        trackType,
+        isEnabled,
+      });
     }
   }
 

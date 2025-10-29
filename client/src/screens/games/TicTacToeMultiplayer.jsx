@@ -32,6 +32,7 @@ const TicTacToeMultiplayer = () => {
   const [roomCode, setRoomCode] = useState("");
   const [playerSymbol, setPlayerSymbol] = useState(null); // 'X' or 'O'
   const [opponent, setOpponent] = useState(null);
+  const [rematchState, setRematchState] = useState("none");
 
   // Board State
   const [squares, setSquares] = useState(Array(9).fill(null));
@@ -97,6 +98,20 @@ const TicTacToeMultiplayer = () => {
     socketService.onTicTacToeOpponentLeft(() => {
       setGameMessage("Your opponent left the game.");
       setGameState("gameover");
+      setRematchState("none");
+    });
+
+    // Listen for a rematch request from opponent
+    socketService.onTicTacToeRematchRequested(() => {
+      setRematchState("received");
+    });
+
+    socketService.onTicTacToeGameReset(({ squares, turn }) => {
+      setSquares(squares);
+      setTurn(turn);
+      setGameState("playing");
+      setRematchState("none");
+      setGameMessage("");
     });
 
     // Cleanup listeners on unmount
@@ -139,6 +154,17 @@ const TicTacToeMultiplayer = () => {
     setTurn("X");
     setGameMessage("");
     setJoinCodeInput("");
+    setRematchState("none"); // Reset rematch state
+  };
+
+  const handleRequestRematch = () => {
+    socketService.requestTicTacToeRematch(roomCode);
+    setRematchState("requested");
+  };
+
+  const handleAcceptRematch = () => {
+    socketService.acceptTicTacToeRematch(roomCode);
+    // No need to set state, onTicTacToeGameReset will handle it
   };
 
   // --- UI Helpers ---
@@ -273,12 +299,39 @@ const TicTacToeMultiplayer = () => {
             {statusText}
           </div>
           {(winner || isDraw || gameState === "gameover") && (
-            <button
-              onClick={resetGame}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md"
-            >
-              Back to Lobby
-            </button>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={resetGame}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md"
+              >
+                Back to Lobby
+              </button>
+              {/* Rematch Button Logic */}
+              {rematchState === "none" && (
+                <button
+                  onClick={handleRequestRematch}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md"
+                >
+                  Reset Game
+                </button>
+              )}
+              {rematchState === "requested" && (
+                <button
+                  disabled
+                  className="px-6 py-2 bg-blue-400 text-white rounded-md opacity-70"
+                >
+                  Request Sent
+                </button>
+              )}
+              {rematchState === "received" && (
+                <button
+                  onClick={handleAcceptRematch}
+                  className="px-6 py-2 bg-green-600 text-white rounded-md"
+                >
+                  Accept Rematch
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -582,6 +582,41 @@ export const handleConnection = (io) => {
         );
       }
     });
+
+    socket.on("tictactoe_request_rematch", (data) => {
+      try {
+        const { roomCode } = data;
+        // Emit to everyone *else* in the room
+        socket.to(roomCode).emit("tictactoe_rematch_requested");
+      } catch (error) {
+        console.error("Rematch request error:", error);
+      }
+    });
+
+    socket.on("tictactoe_accept_rematch", (data) => {
+      try {
+        const { roomCode } = data;
+        const game = tictactoeGames.get(roomCode);
+
+        if (game) {
+          // Reset the game state
+          game.squares = Array(9).fill(null);
+          game.turn = Math.random() < 0.5 ? "X" : "O"; // Randomize start
+          game.status = "playing";
+
+          const payload = {
+            squares: game.squares,
+            turn: game.turn,
+          };
+
+          // Emit the reset state to *everyone* in the room
+          io.to(roomCode).emit("tictactoe_game_reset", payload);
+        }
+      } catch (error) {
+        console.error("Rematch accept error:", error);
+      }
+    });
+
     // Handle disconnection
     socket.on("disconnect", async () => {
       console.log(`User ${socket.user.username} disconnected`);
