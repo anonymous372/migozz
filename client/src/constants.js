@@ -7,3 +7,6 @@ export const SOCKET_BASE_URL =
 
 export const FILE_BASE_URL =
   import.meta.env.VITE_FILE_BASE_URL || "http://localhost:5001";
+
+export const PEER_SERVER_HOST =
+  import.meta.env.VITE_PEER_SERVER_HOST || "localhost";

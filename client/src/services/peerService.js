@@ -1,5 +1,6 @@
 // src/services/peerService.js
 import Peer from "peerjs";
+import { PEER_SERVER_HOST, SOCKET_BASE_URL } from "../constants";
 
 class PeerService {
   constructor() {
@@ -22,10 +23,10 @@ class PeerService {
     }
 
     this.peer = new Peer(userId, {
-      host: "localhost",
-      port: 9000,
+      host: PEER_SERVER_HOST,
+      // port: 5001,
       path: "/peerjs",
-      secure: false,
+      secure: true,
     });
 
     this.peer.on("call", (call) => {

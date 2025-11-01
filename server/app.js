@@ -15,7 +15,7 @@ import { fileURLToPath } from "url";
 import { outGreen, outYellow } from "./src/utils/helpers.js";
 import router from "./src/routes/index.js";
 import { socketAuth, handleConnection } from "./src/services/socketService.js";
-import { PeerServer } from "peer";
+import { PeerServer, ExpressPeerServer } from "peer";
 
 // ES module dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +68,13 @@ const connectDB = async () => {
   }
 };
 
+const peerServer = ExpressPeerServer(server, {
+  path: "/", // The base path (we'll mount it at /peerjs)
+  debug: true,
+});
+
+app.use("/peerjs", peerServer);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -94,11 +101,6 @@ connectDB().then(() => {
     console.log(`API available at http://localhost:${PORT}/api/v1`);
     console.log(`Socket.io server running on port ${PORT}`);
 
-    const peerServer = PeerServer({
-      port: 9000,
-      path: "/peerjs",
-    });
-
-    console.log("PeerJS server running on port 9000");
+    console.log("PeerJS server running");
   });
 });
