@@ -69,8 +69,6 @@ const HomePage = () => {
     }
 
     // --- 1. Define all event handlers ---
-    // We define them here so we can pass the *exact same function reference*
-    // to both socketService.on() and socketService.off()
     const handleUserOnline = (data) => {
       setOnlineFriends((prev) => {
         const exists = prev.find((friend) => friend._id === data.userId);
@@ -116,8 +114,6 @@ const HomePage = () => {
           typeof message.sender === "object"
             ? message.sender._id || message.sender.id
             : message.sender;
-
-        // Use the ref to get the *current* selected friend
         const currentSelected = selectedFriendRef.current;
         if (!currentSelected || currentSelected._id !== senderId) {
           setUnreadCounts((prev) => {
@@ -134,60 +130,104 @@ const HomePage = () => {
 
     // Video call listeners
     const handleVideoCallOffer = (data) => {
-      if (activeCall || activeAudioCall) {
+      if (activeCall || activeAudioCall || activeGroupCall) {
+        // Check group call
         socketService.rejectVideoCall(data.callerInfo._id);
       } else {
         setIncomingCall(data.callerInfo);
       }
     };
-
     const handleVideoCallAccept = (data) => {
       setOutgoingCall(null);
       setActiveCall({ friend: data.accepterInfo, isCaller: true });
     };
-
     const handleVideoCallReject = (data) => {
       setOutgoingCall(null);
       alert(`${data.rejectedBy} rejected the call.`);
     };
-
     const handleVideoCallEnd = () => {
       setActiveCall(null);
     };
-
     const handleVideoCallCancel = () => {
       setIncomingCall(null);
     };
 
     // Audio call listeners
     const handleAudioCallOffer = (data) => {
-      if (activeCall || activeAudioCall) {
+      if (activeCall || activeAudioCall || activeGroupCall) {
+        // Check group call
         socketService.rejectAudioCall(data.callerInfo._id);
       } else {
         setIncomingAudioCall(data.callerInfo);
       }
     };
-
     const handleAudioCallAccept = (data) => {
       setOutgoingAudioCall(null);
       setActiveAudioCall({ friend: data.accepterInfo, isCaller: true });
     };
-
     const handleAudioCallReject = (data) => {
       setOutgoingAudioCall(null);
       alert(`${data.rejectedBy} rejected the call.`);
     };
-
     const handleAudioCallCancel = () => {
       setIncomingAudioCall(null);
     };
-
     const handleAudioCallEnd = () => {
       setActiveAudioCall(null);
     };
 
+    // --- ADDED: Group Call Handlers ---
+    const handleGroupCallYouStarted = (data) => {
+      peerService.init(user._id); // Init our peer
+      peerService.getLocalStream(data.callType).then(() => {
+        setActiveGroupCall(data); // Open the call modal
+      });
+    };
+
+    const handleGroupCallOffer = (data) => {
+      if (activeCall || activeAudioCall || activeGroupCall) {
+        // socketService.rejectGroupCall(data.roomId); // Optional: add reject
+        return;
+      }
+      setIncomingGroupCall(data);
+    };
+
+    const handleGroupCallYouJoined = (data) => {
+      peerService.init(user._id); // Init our peer
+      peerService.getLocalStream(data.callType).then((stream) => {
+        setActiveGroupCall(data); // Open the call modal
+        // Call all existing members
+        data.members.forEach((member) => {
+          if (member.peerId !== user._id) {
+            peerService.callPeer(member.peerId, stream);
+          }
+        });
+      });
+    };
+
+    const handleGroupCallNewMember = (data) => {
+      // A new user joined, let's call them
+      if (peerService.localStream) {
+        peerService.callPeer(data.peerId, peerService.localStream);
+      }
+      setActiveGroupCall((prev) => ({
+        ...prev,
+        members: [...(prev?.members || []), data],
+      }));
+    };
+
+    const handleGroupCallMemberLeft = (data) => {
+      peerService.closeConnection(data.peerId);
+      setActiveGroupCall((prev) => ({
+        ...prev,
+        members: prev.members.filter((m) => m.peerId !== data.peerId),
+      }));
+    };
+    // --- END: Group Call Handlers ---
+
     // --- 2. Function to attach all listeners ---
     const setupSocketListeners = () => {
+      // 1-on-1 Calls
       socketService.onUserOnline(handleUserOnline);
       socketService.onUserOffline(handleUserOffline);
       socketService.onNewFriendRequest(handleNewFriendRequest);
@@ -202,6 +242,13 @@ const HomePage = () => {
       socketService.onAudioCallReject(handleAudioCallReject);
       socketService.onAudioCallCancel(handleAudioCallCancel);
       socketService.onAudioCallEnd(handleAudioCallEnd);
+
+      // --- ADDED: Group Call Listeners ---
+      socketService.onGroupCallYouStarted(handleGroupCallYouStarted);
+      socketService.onGroupCallOffer(handleGroupCallOffer);
+      socketService.onGroupCallYouJoined(handleGroupCallYouJoined);
+      socketService.onGroupCallNewMember(handleGroupCallNewMember);
+      socketService.onGroupCallMemberLeft(handleGroupCallMemberLeft);
     };
 
     // --- 3. Main initialization function ---
@@ -211,7 +258,6 @@ const HomePage = () => {
         // Wait for the socket to be connected by Layout.jsx
         let retries = 0;
         while (!socketService.isConnected && retries < 50) {
-          // Poll for 5 seconds
           await new Promise((resolve) => setTimeout(resolve, 100));
           retries++;
         }
@@ -219,13 +265,16 @@ const HomePage = () => {
         if (!socketService.isConnected) {
           console.error("Socket failed to connect after 5 seconds.");
           setLoading(false);
-          return; // Stop if socket is not connected
+          return;
         }
 
         // --- Socket is connected, proceed ---
 
         // 1. Attach all event listeners
         setupSocketListeners();
+
+        // 1b. Initialize PeerJS *once*
+        peerService.init(user._id);
 
         // 2. Fetch all API data in parallel
         const [profile, friends, online, requests, rooms] = await Promise.all([
@@ -238,20 +287,13 @@ const HomePage = () => {
 
         // 3. Set all state
         if (profile.status === 200) {
-          // You can update user data here if needed
+          /* ... */
         }
-        if (friends.status === 200) {
-          setFriends(friends.data.friends);
-        }
-        if (online.status === 200) {
-          setOnlineFriends(online.data.onlineFriends);
-        }
-        if (requests.status === 200) {
+        if (friends.status === 200) setFriends(friends.data.friends);
+        if (online.status === 200) setOnlineFriends(online.data.onlineFriends);
+        if (requests.status === 200)
           setFriendRequests(requests.data.friendRequests);
-        }
-        if (rooms.status === 200) {
-          setRooms(rooms.data.rooms);
-        }
+        if (rooms.status === 200) setRooms(rooms.data.rooms);
       } catch (error) {
         console.error("Error initializing data:", error);
       } finally {
@@ -263,7 +305,7 @@ const HomePage = () => {
 
     // --- 4. Cleanup function ---
     return () => {
-      // Remove all listeners to prevent duplicates on re-render
+      // Remove all 1-on-1 listeners
       socketService.off("user_online", handleUserOnline);
       socketService.off("user_offline", handleUserOffline);
       socketService.off("new_friend_request", handleNewFriendRequest);
@@ -278,6 +320,13 @@ const HomePage = () => {
       socketService.off("audio_call_reject", handleAudioCallReject);
       socketService.off("audio_call_cancel", handleAudioCallCancel);
       socketService.off("audio_call_end", handleAudioCallEnd);
+
+      // --- ADDED: Group Call Cleanup ---
+      socketService.off("group_call_you_started", handleGroupCallYouStarted);
+      socketService.off("group_call_offer", handleGroupCallOffer);
+      socketService.off("group_call_you_joined", handleGroupCallYouJoined);
+      socketService.off("group_call_new_member", handleGroupCallNewMember);
+      socketService.off("group_call_member_left", handleGroupCallMemberLeft);
     };
   }, [user]); // This effect now correctly depends on the user
 
@@ -446,6 +495,7 @@ const HomePage = () => {
 
   // --- 4. ADD NEW GROUP CALL HANDLERS ---
   const handleStartGroupCall = (room, callType) => {
+    console.log("here");
     socketService.startGroupCall(room._id, room.name, callType);
   };
 
