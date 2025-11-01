@@ -16,6 +16,7 @@ import {
   UserCheck,
   Mail,
   ArrowLeftToLine,
+  User,
 } from "lucide-react";
 import Tooltip from "../components/Tooltip";
 import AddFriendModal from "../components/AddFriendModal";
@@ -32,6 +33,7 @@ import JoinRoomModal from "../components/JoinRoomModal";
 import RoomList from "../components/RoomList";
 import GroupChatWindow from "../components/GroupChatWindow";
 import GroupCallModal from "../components/GroupCallModal";
+import ProfileModal from "../components/ProfileModal";
 
 const HomePage = () => {
   const { user, logout } = useAuth();
@@ -57,253 +59,199 @@ const HomePage = () => {
   const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
   const [activeGroupCall, setActiveGroupCall] = useState(null);
   const [incomingGroupCall, setIncomingGroupCall] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
-    const initializeData = async () => {
-      try {
-        // Get user profile
-        const profileResponse = await apiService.getUserProfile();
-        if (profileResponse.status === 200) {
-          // Update user data in context if needed
-        }
+    // If there is no user, do nothing.
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-        // Get friends list
-        const friendsResponse = await apiService.getFriends();
-        if (friendsResponse.status === 200) {
-          setFriends(friendsResponse.data.friends);
-        }
-
-        // Get online friends
-        const onlineResponse = await apiService.getOnlineFriends();
-        if (onlineResponse.status === 200) {
-          setOnlineFriends(onlineResponse.data.onlineFriends);
-        }
-
-        // Get friend requests
-        const requestsResponse = await apiService.getFriendRequests();
-        if (requestsResponse.status === 200) {
-          setFriendRequests(requestsResponse.data.friendRequests);
-        }
-
-        // --- Fetch user's rooms ---
-        const roomsResponse = await apiService.getRooms();
-        if (roomsResponse.status === 200) {
-          setRooms(roomsResponse.data.rooms);
-        }
-
-        // Set up socket listeners
-        socketService.onUserOnline((data) => {
-          setOnlineFriends((prev) => {
-            const exists = prev.find((friend) => friend._id === data.userId);
-            if (!exists) {
-              return [
-                ...prev,
-                {
-                  _id: data.userId,
-                  username: data.username,
-                  avatar: data.avatar,
-                  isOnline: true,
-                },
-              ];
-            }
-            return prev;
-          });
-        });
-
-        socketService.onUserOffline((data) => {
-          setOnlineFriends((prev) =>
-            prev.filter((friend) => friend._id !== data.userId)
-          );
-        });
-
-        socketService.onNewFriendRequest((data) => {
-          setFriendRequests((prev) => [
+    // --- 1. Define all event handlers ---
+    // We define them here so we can pass the *exact same function reference*
+    // to both socketService.on() and socketService.off()
+    const handleUserOnline = (data) => {
+      setOnlineFriends((prev) => {
+        const exists = prev.find((friend) => friend._id === data.userId);
+        if (!exists) {
+          return [
             ...prev,
             {
-              _id: Date.now(), // temporary ID
-              requester: {
-                _id: data.requesterId,
-                username: data.requesterUsername,
-                avatar: data.requesterAvatar,
-              },
-              status: "pending",
+              _id: data.userId,
+              username: data.username,
+              avatar: data.avatar,
+              isOnline: true,
             },
-          ]);
-        });
+          ];
+        }
+        return prev;
+      });
+    };
 
-        // When a new message arrives and user doesn't have that chat open,
-        // increment the unread count for the corresponding friend in the sidebar.
-        socketService.onNewMessage((message) => {
-          try {
-            const senderId =
-              typeof message.sender === "object"
-                ? message.sender._id || message.sender.id
-                : message.sender;
+    const handleUserOffline = (data) => {
+      setOnlineFriends((prev) =>
+        prev.filter((friend) => friend._id !== data.userId)
+      );
+    };
 
-            // If there's no selectedFriend or the message is from someone else,
-            // increment unread count for that friend. Use ref to get latest selection.
-            const currentSelected = selectedFriendRef.current;
-            if (!currentSelected || currentSelected._id !== senderId) {
-              setUnreadCounts((prev) => {
-                const current = prev[senderId] || 0;
-                return { ...prev, [senderId]: current + 1 };
-              });
-            } else {
-              // If the chat is open, ensure the unread count is zero
-              setUnreadCounts((prev) => ({ ...prev, [senderId]: 0 }));
-            }
-          } catch (err) {
-            console.error("Error handling sidebar unread increment:", err);
-          }
-        });
+    const handleNewFriendRequest = (data) => {
+      setFriendRequests((prev) => [
+        ...prev,
+        {
+          _id: Date.now(), // temporary ID
+          requester: {
+            _id: data.requesterId,
+            username: data.requesterUsername,
+            avatar: data.requesterAvatar,
+          },
+          status: "pending",
+        },
+      ]);
+    };
 
-        // Video call listeners
-        socketService.onVideoCallOffer((data) => {
-          // Check if already in a call
-          if (activeCall || activeAudioCall) {
-            // Automatically reject if busy
-            socketService.rejectVideoCall(data.callerInfo._id);
-          } else {
-            setIncomingCall(data.callerInfo);
-          }
-        });
+    const handleNewMessage = (message) => {
+      try {
+        const senderId =
+          typeof message.sender === "object"
+            ? message.sender._id || message.sender.id
+            : message.sender;
 
-        socketService.onVideoCallAccept((data) => {
-          // Call was accepted by the person we were calling
-          setOutgoingCall(null); // No longer "ringing"
-          setActiveCall({ friend: data.accepterInfo, isCaller: true });
-        });
-
-        socketService.onVideoCallReject((data) => {
-          // Call was rejected
-          setOutgoingCall(null);
-          alert(`${data.rejectedBy} rejected the call.`);
-        });
-
-        socketService.onVideoCallEnd(() => {
-          setActiveCall(null); // Just close the modal
-          // You could also add a "Call ended" notification here
-        });
-
-        socketService.onVideoCallCancel(() => {
-          setIncomingCall(null); // Close the incoming call modal
-        });
-
-        // Audio call listeners
-        socketService.onAudioCallOffer((data) => {
-          // --- BUSY CHECK: Update to check both call types ---
-          if (activeCall || activeAudioCall) {
-            socketService.rejectAudioCall(data.callerInfo._id);
-          } else {
-            setIncomingAudioCall(data.callerInfo);
-          }
-        });
-
-        socketService.onAudioCallAccept((data) => {
-          setOutgoingAudioCall(null);
-          setActiveAudioCall({ friend: data.accepterInfo, isCaller: true });
-        });
-
-        socketService.onAudioCallReject((data) => {
-          setOutgoingAudioCall(null);
-          alert(`${data.rejectedBy} rejected the call.`);
-        });
-
-        socketService.onAudioCallCancel(() => {
-          setIncomingAudioCall(null);
-        });
-
-        socketService.onAudioCallEnd(() => {
-          setActiveAudioCall(null);
-        });
-
-        socketService.onGroupCallOffer((data) => {
-          // data: { roomId, roomName, callType, caller }
-          if (!activeCall && !activeAudioCall && !activeGroupCall) {
-            setIncomingGroupCall(data);
-          }
-        });
-
-        socketService.onGroupCallYouStarted((data) => {
-          // data: { roomId, roomName, callType, members }
-          peerService.init(user._id); // Init PeerJS
-          // setActiveGroupCall(data);
-          setActiveGroupCall({ ...data, members: [user._id] }); // Add self to members
-        });
-
-        socketService.onGroupCallYouJoined(async (data) => {
-          // data: { roomId, roomName, callType, members: [peerId1, peerId2] }
-          peerService.init(user._id); // Init PeerJS
-          const stream = await peerService.getLocalStream(data.callType);
-          setActiveGroupCall(data);
-
-          // Call all existing members
-          for (const peerId of data.members) {
-            if (peerId !== user._id) {
-              // Don't call self
-              console.log("Calling existing member:", peerId);
-              peerService.callPeer(peerId, stream);
-            }
-          }
-        });
-
-        // socketService.onGroupCallNewMember(async (data) => {
-        //   // data: { roomId, newMemberId }
-        //   if (
-        //     activeGroupCall &&
-        //     data.roomId === activeGroupCall.roomId &&
-        //     data.newMemberId !== user._id
-        //   ) {
-        //     console.log("New member joined, calling them:", data.newMemberId);
-        //     // Call the new member
-        //     const stream = peerService.localStream;
-        //     peerService.callPeer(data.newMemberId, stream);
-        //   }
-        // });
-
-        socketService.onGroupCallNewMember(async (data) => {
-          // data: { roomId, newMemberId }
-          if (data.newMemberId !== user._id) {
-            // --- FIX 1: Add new member to state ---
-            setActiveGroupCall((prev) => {
-              if (prev && data.roomId === prev.roomId) {
-                // Call the new member
-                console.log(
-                  "New member joined, calling them:",
-                  data.newMemberId
-                );
-                const stream = peerService.localStream;
-                peerService.callPeer(data.newMemberId, stream);
-                // Add to members list
-                return {
-                  ...prev,
-                  members: [...prev.members, data.newMemberId],
-                };
-              }
-              return prev;
-            });
-          }
-        });
-
-        socketService.onGroupCallMemberLeft((data) => {
-          // data: { roomId, userId }
-          // --- FIX 1: Remove member from state ---
-          setActiveGroupCall((prev) => {
-            if (prev && data.roomId === prev.roomId) {
-              console.log("Member left:", data.userId);
-              // Close peer connection (handled in modal)
-              // Remove from members list
-              return {
-                ...prev,
-                members: prev.members.filter((id) => id !== data.userId),
-              };
-            }
-            return prev;
+        // Use the ref to get the *current* selected friend
+        const currentSelected = selectedFriendRef.current;
+        if (!currentSelected || currentSelected._id !== senderId) {
+          setUnreadCounts((prev) => {
+            const current = prev[senderId] || 0;
+            return { ...prev, [senderId]: current + 1 };
           });
-        });
+        } else {
+          setUnreadCounts((prev) => ({ ...prev, [senderId]: 0 }));
+        }
+      } catch (err) {
+        console.error("Error handling sidebar unread increment:", err);
+      }
+    };
 
-        // Update online status
-        // await apiService.updateOnlineStatus(true);
+    // Video call listeners
+    const handleVideoCallOffer = (data) => {
+      if (activeCall || activeAudioCall) {
+        socketService.rejectVideoCall(data.callerInfo._id);
+      } else {
+        setIncomingCall(data.callerInfo);
+      }
+    };
+
+    const handleVideoCallAccept = (data) => {
+      setOutgoingCall(null);
+      setActiveCall({ friend: data.accepterInfo, isCaller: true });
+    };
+
+    const handleVideoCallReject = (data) => {
+      setOutgoingCall(null);
+      alert(`${data.rejectedBy} rejected the call.`);
+    };
+
+    const handleVideoCallEnd = () => {
+      setActiveCall(null);
+    };
+
+    const handleVideoCallCancel = () => {
+      setIncomingCall(null);
+    };
+
+    // Audio call listeners
+    const handleAudioCallOffer = (data) => {
+      if (activeCall || activeAudioCall) {
+        socketService.rejectAudioCall(data.callerInfo._id);
+      } else {
+        setIncomingAudioCall(data.callerInfo);
+      }
+    };
+
+    const handleAudioCallAccept = (data) => {
+      setOutgoingAudioCall(null);
+      setActiveAudioCall({ friend: data.accepterInfo, isCaller: true });
+    };
+
+    const handleAudioCallReject = (data) => {
+      setOutgoingAudioCall(null);
+      alert(`${data.rejectedBy} rejected the call.`);
+    };
+
+    const handleAudioCallCancel = () => {
+      setIncomingAudioCall(null);
+    };
+
+    const handleAudioCallEnd = () => {
+      setActiveAudioCall(null);
+    };
+
+    // --- 2. Function to attach all listeners ---
+    const setupSocketListeners = () => {
+      socketService.onUserOnline(handleUserOnline);
+      socketService.onUserOffline(handleUserOffline);
+      socketService.onNewFriendRequest(handleNewFriendRequest);
+      socketService.onNewMessage(handleNewMessage);
+      socketService.onVideoCallOffer(handleVideoCallOffer);
+      socketService.onVideoCallAccept(handleVideoCallAccept);
+      socketService.onVideoCallReject(handleVideoCallReject);
+      socketService.onVideoCallEnd(handleVideoCallEnd);
+      socketService.onVideoCallCancel(handleVideoCallCancel);
+      socketService.onAudioCallOffer(handleAudioCallOffer);
+      socketService.onAudioCallAccept(handleAudioCallAccept);
+      socketService.onAudioCallReject(handleAudioCallReject);
+      socketService.onAudioCallCancel(handleAudioCallCancel);
+      socketService.onAudioCallEnd(handleAudioCallEnd);
+    };
+
+    // --- 3. Main initialization function ---
+    const initializeData = async () => {
+      setLoading(true);
+      try {
+        // Wait for the socket to be connected by Layout.jsx
+        let retries = 0;
+        while (!socketService.isConnected && retries < 50) {
+          // Poll for 5 seconds
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          retries++;
+        }
+
+        if (!socketService.isConnected) {
+          console.error("Socket failed to connect after 5 seconds.");
+          setLoading(false);
+          return; // Stop if socket is not connected
+        }
+
+        // --- Socket is connected, proceed ---
+
+        // 1. Attach all event listeners
+        setupSocketListeners();
+
+        // 2. Fetch all API data in parallel
+        const [profile, friends, online, requests, rooms] = await Promise.all([
+          apiService.getUserProfile(),
+          apiService.getFriends(),
+          apiService.getOnlineFriends(),
+          apiService.getFriendRequests(),
+          apiService.getRooms(),
+        ]);
+
+        // 3. Set all state
+        if (profile.status === 200) {
+          // You can update user data here if needed
+        }
+        if (friends.status === 200) {
+          setFriends(friends.data.friends);
+        }
+        if (online.status === 200) {
+          setOnlineFriends(online.data.onlineFriends);
+        }
+        if (requests.status === 200) {
+          setFriendRequests(requests.data.friendRequests);
+        }
+        if (rooms.status === 200) {
+          setRooms(rooms.data.rooms);
+        }
       } catch (error) {
         console.error("Error initializing data:", error);
       } finally {
@@ -313,12 +261,25 @@ const HomePage = () => {
 
     initializeData();
 
-    // Cleanup on unmount
+    // --- 4. Cleanup function ---
     return () => {
-      // apiService.updateOnlineStatus(false);
-      // socketService.disconnect();
+      // Remove all listeners to prevent duplicates on re-render
+      socketService.off("user_online", handleUserOnline);
+      socketService.off("user_offline", handleUserOffline);
+      socketService.off("new_friend_request", handleNewFriendRequest);
+      socketService.off("new_message", handleNewMessage);
+      socketService.off("video_call_offer", handleVideoCallOffer);
+      socketService.off("video_call_accept", handleVideoCallAccept);
+      socketService.off("video_call_reject", handleVideoCallReject);
+      socketService.off("video_call_end", handleVideoCallEnd);
+      socketService.off("video_call_cancel", handleVideoCallCancel);
+      socketService.off("audio_call_offer", handleAudioCallOffer);
+      socketService.off("audio_call_accept", handleAudioCallAccept);
+      socketService.off("audio_call_reject", handleAudioCallReject);
+      socketService.off("audio_call_cancel", handleAudioCallCancel);
+      socketService.off("audio_call_end", handleAudioCallEnd);
     };
-  }, []);
+  }, [user]); // This effect now correctly depends on the user
 
   const handleFriendSelect = (friend) => {
     setSelectedFriend(friend);
@@ -633,6 +594,23 @@ const HomePage = () => {
             />
           </div>
         </div>
+        <div className="flex-shrink-0 p-4">
+          {/* Profile Button */}
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className={`w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mb-2 ${
+              sidebarCollapsed ? "justify-center" : "justify-start"
+            }`}
+            title="Profile"
+          >
+            <User className="h-5 w-5 flex-shrink-0 text-gray-600 dark:text-gray-400" />
+            {!sidebarCollapsed && (
+              <span className="font-medium text-gray-600 dark:text-gray-400">
+                Profile
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Main Chat Area */}
@@ -839,6 +817,10 @@ const HomePage = () => {
         open={showJoinRoomModal}
         onClose={() => setShowJoinRoomModal(false)}
         onRoomJoined={handleRoomJoined}
+      />
+      <ProfileModal
+        open={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
       />
     </div>
   );

@@ -460,6 +460,25 @@ class SocketService {
     }
   }
 
+  removeCoreListeners() {
+    if (this.socket) {
+      this.socket.off("user_online");
+      this.socket.off("user_offline");
+      this.socket.off("new_friend_request");
+      this.socket.off("new_message");
+      this.socket.off("video_call_offer");
+      this.socket.off("video_call_accept");
+      this.socket.off("video_call_reject");
+      this.socket.off("video_call_end");
+      this.socket.off("video_call_cancel");
+      this.socket.off("audio_call_offer");
+      this.socket.off("audio_call_accept");
+      this.socket.off("audio_call_reject");
+      this.socket.off("audio_call_cancel");
+      this.socket.off("audio_call_end");
+    }
+  }
+
   // Error handling
   onError(callback) {
     if (this.socket) {

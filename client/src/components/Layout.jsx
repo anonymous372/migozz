@@ -6,27 +6,36 @@ import apiService from "../services/api";
 import Navbar from "./Navbar";
 
 const Layout = () => {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
+
   // This useEffect manages the *entire* socket connection lifecycle
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    // 3. Check if the user object exists
+    if (user) {
+      const token = localStorage.getItem("token");
 
-    if (token) {
-      // 1. Connect to socket
-      socketService.connect(token);
+      // Only connect if we have a token and are not already connected
+      if (token && !socketService.isConnected) {
+        console.log("Auth state updated: Connecting socket...");
 
-      // 2. Set online status in DB
-      apiService.updateOnlineStatus(true);
+        // 1. Connect to socket
+        socketService.connect(token);
+
+        // 2. Set online status in DB
+        apiService.updateOnlineStatus(true);
+      }
     }
 
-    // This cleanup runs ONLY when the Layout unmounts
-    // (i.e., when the user is logged out)
+    // This cleanup runs when the 'user' object becomes null (on logout)
     return () => {
-      apiService.updateOnlineStatus(false);
-      socketService.disconnect();
+      if (socketService.isConnected) {
+        console.log("Auth state changed: Disconnecting socket...");
+        apiService.updateOnlineStatus(false);
+        socketService.disconnect();
+      }
     };
-  }, []);
+  }, [user]);
 
   const handleProperLogout = () => {
     // This is the *correct* way to log out

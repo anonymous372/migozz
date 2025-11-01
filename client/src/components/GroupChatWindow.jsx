@@ -372,7 +372,7 @@ const GroupChatWindow = ({
             ) : (
               <Link className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             )}
-            </button>
+          </button>
           {/* --- ADD CALL BUTTONS --- */}
           <button
             onClick={() => handleStartGroupCall(room, "audio")}
@@ -429,10 +429,8 @@ const GroupChatWindow = ({
                   {/* Sender name - Show if not current user and first message in block */}
                   {!isCurrentUser && showSenderName && (
                     <div className="text-xs mb-1 font-semibold mt-2 text-left text-gray-600 dark:text-gray-400">
-                      {message.sender?.username[0] +
-                        message.sender?.username.slice(1) ||
-                        message.senderInfo?.username[0] +
-                          message.senderInfo?.username.slice(1) ||
+                      {message.sender?.username ||
+                        message.senderInfo?.username ||
                         "Unknown User"}
                     </div>
                   )}

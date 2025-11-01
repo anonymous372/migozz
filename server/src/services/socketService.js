@@ -53,11 +53,22 @@ export const handleConnection = (io) => {
     socket.join(`user_${socket.userId}`);
 
     // Notify friends about online status
-    socket.broadcast.emit("user_online", {
-      userId: socket.userId,
-      username: socket.user.username,
-      avatar: socket.user.avatar,
-    });
+    // socket.broadcast.emit("user_online", {
+    //   userId: socket.userId,
+    //   username: socket.user.username,
+    //   avatar: socket.user.avatar,
+    // });
+
+    if (socket.user.friends && socket.user.friends.length > 0) {
+      const friendRooms = socket.user.friends.map(
+        (friendId) => `user_${friendId.toString()}`
+      );
+      socket.to(friendRooms).emit("user_online", {
+        userId: socket.userId,
+        username: socket.user.username,
+        avatar: socket.user.avatar,
+      });
+    }
 
     // --- JOIN USER TO ALL THEIR ROOMS ---
     try {
@@ -631,10 +642,20 @@ export const handleConnection = (io) => {
       }).exec();
 
       // Notify friends about offline status
-      socket.broadcast.emit("user_offline", {
-        userId: socket.userId,
-        username: socket.user.username,
-      });
+      // socket.broadcast.emit("user_offline", {
+      //   userId: socket.userId,
+      //   username: socket.user.username,
+      // });
+
+      if (socket.user.friends && socket.user.friends.length > 0) {
+        const friendRooms = socket.user.friends.map(
+          (friendId) => `user_${friendId.toString()}`
+        );
+        socket.to(friendRooms).emit("user_offline", {
+          userId: socket.userId,
+          username: socket.user.username,
+        });
+      }
 
       for (const [roomId, call] of activeGroupCalls.entries()) {
         const memberIndex = call.members.findIndex(
