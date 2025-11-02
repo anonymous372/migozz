@@ -46,7 +46,9 @@ const HomePage = () => {
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unreadCounts, setUnreadCounts] = useState({});
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("sidebarCollapsed") === "true"
+  );
   const [incomingCall, setIncomingCall] = useState(null); // { callerInfo }
   const [activeCall, setActiveCall] = useState(null); // { friend, isCaller }
   const [outgoingCall, setOutgoingCall] = useState(null); // { friend } (for "ringing..." UI, optional)
@@ -178,7 +180,7 @@ const HomePage = () => {
 
     // --- ADDED: Group Call Handlers ---
     const handleGroupCallYouStarted = (data) => {
-      peerService.init(user._id); // Init our peer
+      // peerService.init(user._id); // Already done
       peerService.getLocalStream(data.callType).then(() => {
         setActiveGroupCall(data); // Open the call modal
       });
@@ -193,12 +195,14 @@ const HomePage = () => {
     };
 
     const handleGroupCallYouJoined = (data) => {
-      peerService.init(user._id); // Init our peer
+      // peerService.init(user._id); // Already done
       peerService.getLocalStream(data.callType).then((stream) => {
         setActiveGroupCall(data); // Open the call modal
         // Call all existing members
         data.members.forEach((member) => {
+          // The server now sends full objects: { peerId, username }
           if (member.peerId !== user._id) {
+            console.log("Joining, calling existing member:", member.username);
             peerService.callPeer(member.peerId, stream);
           }
         });
@@ -206,22 +210,46 @@ const HomePage = () => {
     };
 
     const handleGroupCallNewMember = (data) => {
+      // data.member is the full { peerId, username } object
+      const { member } = data;
+
       // A new user joined, let's call them
       if (peerService.localStream) {
-        peerService.callPeer(data.peerId, peerService.localStream);
+        console.log("New member joined, calling:", member.username);
+        peerService.callPeer(member.peerId, peerService.localStream);
       }
-      setActiveGroupCall((prev) => ({
-        ...prev,
-        members: [...(prev?.members || []), data],
-      }));
+
+      // Add them to our local state
+      setActiveGroupCall((prev) => {
+        if (!prev) return null; // Safety check
+        // Avoid adding duplicates
+        if (prev.members.find((m) => m.peerId === member.peerId)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          members: [...prev.members, member],
+        };
+      });
     };
 
     const handleGroupCallMemberLeft = (data) => {
+      // --- THIS IS THE CRASH FIX ---
+      // If we are not in a call, do nothing.
+      if (!activeGroupCall) {
+        return;
+      }
+
+      console.log("Member left, closing connection:", data.peerId);
       peerService.closeConnection(data.peerId);
-      setActiveGroupCall((prev) => ({
-        ...prev,
-        members: prev.members.filter((m) => m.peerId !== data.peerId),
-      }));
+
+      setActiveGroupCall((prev) => {
+        if (!prev) return null; // Safety check
+        return {
+          ...prev,
+          members: prev.members.filter((m) => m.peerId !== data.peerId),
+        };
+      });
     };
     // --- END: Group Call Handlers ---
 
@@ -377,7 +405,11 @@ const HomePage = () => {
   };
 
   const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
+    setSidebarCollapsed((prevState) => {
+      const newState = !prevState;
+      localStorage.setItem("sidebarCollapsed", newState); // Save the new state
+      return newState;
+    });
   };
 
   const handleLogout = () => {
@@ -622,8 +654,11 @@ const HomePage = () => {
 
         {/* --- MODIFIED: Sidebar Content (Scrollable Sections) --- */}
         <div className="flex-1 min-h-0 flex flex-col">
-          {/* --- Friends Section --- */}
-          <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar">
+          {/* --- Friends Section (gets 2/3 of the space) --- */}
+          <div className="flex-[2] min-h-0">
+            {/* - Replaced 'flex-1' with 'flex-[2]' (shorthand for flex-grow: 2)
+              - Removed redundant 'overflow-y-auto' (FriendsList handles its own scroll)
+            */}
             <FriendsList
               friends={friends}
               onlineFriends={onlineFriends}
@@ -634,8 +669,11 @@ const HomePage = () => {
             />
           </div>
 
-          {/* --- Rooms Section --- */}
-          <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar dark:border-gray-700">
+          {/* --- Rooms Section (gets 1/3 of the space) --- */}
+          <div className="flex-1 min-h-0 dark:border-gray-700">
+            {/* - 'flex-1' (shorthand for flex-grow: 1) is correct
+              - Removed redundant 'overflow-y-auto' (RoomList handles its own scroll)
+            */}
             <RoomList
               rooms={rooms}
               onRoomSelect={handleRoomSelect}

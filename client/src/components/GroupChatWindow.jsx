@@ -489,7 +489,7 @@ const GroupChatWindow = ({
       </div>
 
       {/* 22. RENDER: Message Input (no changes) */}
-      <div className="p-4 border-t ...">
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
         <form onSubmit={handleSendMessage} className="flex items-center gap-3">
           {/* Hidden file input */}
           <input

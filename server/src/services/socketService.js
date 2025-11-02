@@ -377,20 +377,26 @@ export const handleConnection = (io) => {
       }
     });
 
-    // --- 4. ADD GROUP CALL HANDLERS (Add this entire block) ---
+    // --- 4. ADD GROUP CALL HANDLERS (REPLACED) ---
     socket.on("group_call_start", (data) => {
-      const { roomId, callType } = data;
+      const { roomId, roomName, callType } = data;
+
+      // The full member object
+      const newMember = {
+        peerId: socket.userId,
+        username: socket.user.username,
+      };
 
       // Set this call as active
       activeGroupCalls.set(roomId, {
         callType,
-        members: [{ id: socket.userId, user: socket.user }],
+        members: [newMember], // Store the full member object
       });
 
       // Tell the caller they started the call
       socket.emit("group_call_you_started", {
         roomId,
-        roomName: data.roomName, // Pass name along
+        roomName,
         callType,
         members: [], // No one else is in yet
       });
@@ -398,36 +404,43 @@ export const handleConnection = (io) => {
       // Tell everyone else in the room a call has started
       socket.to(roomId).emit("group_call_offer", {
         roomId,
-        roomName: data.roomName,
+        roomName,
         callType,
         caller: socket.user,
       });
     });
 
     socket.on("group_call_join", (data) => {
-      const { roomId } = data;
+      const { roomId, roomName } = data;
       const call = activeGroupCalls.get(roomId);
 
       if (!call) return; // Call doesn't exist
 
-      const existingMembers = call.members.map((m) => m.id);
+      // Get list of existing members (full objects)
+      const existingMembers = call.members;
+
+      // The new member's full object
+      const newMember = {
+        peerId: socket.userId,
+        username: socket.user.username,
+      };
 
       // Tell the new member who is already in the call
       socket.emit("group_call_you_joined", {
         roomId,
-        roomName: data.roomName,
+        roomName,
         callType: call.callType,
-        members: existingMembers, // Tell new user to call everyone
+        members: existingMembers, // Send full member objects
       });
 
       // Tell everyone else a new member joined
       socket.to(roomId).emit("group_call_new_member", {
         roomId,
-        newMemberId: socket.userId,
+        member: newMember, // Send the full new member object
       });
 
       // Add new member to the list
-      call.members.push({ id: socket.userId, user: socket.user });
+      call.members.push(newMember);
     });
 
     socket.on("group_call_leave", (data) => {
@@ -437,12 +450,12 @@ export const handleConnection = (io) => {
       if (!call) return;
 
       // Remove member from list
-      call.members = call.members.filter((m) => m.id !== socket.userId);
+      call.members = call.members.filter((m) => m.peerId !== socket.userId);
 
       // Tell remaining members who left
       socket.to(roomId).emit("group_call_member_left", {
         roomId,
-        userId: socket.userId,
+        peerId: socket.userId, // <-- FIX
       });
 
       // If no one is left, end the call
@@ -657,9 +670,10 @@ export const handleConnection = (io) => {
         });
       }
 
+      // Find any calls this user was in
       for (const [roomId, call] of activeGroupCalls.entries()) {
         const memberIndex = call.members.findIndex(
-          (m) => m.id === socket.userId
+          (m) => m.peerId === socket.userId // <-- Check peerId
         );
 
         if (memberIndex !== -1) {
@@ -669,7 +683,7 @@ export const handleConnection = (io) => {
           // Notify remaining members
           socket.to(roomId).emit("group_call_member_left", {
             roomId,
-            userId: socket.userId,
+            peerId: socket.userId, // <-- FIX
           });
 
           // If call is now empty, delete it

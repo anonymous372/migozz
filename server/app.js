@@ -76,7 +76,12 @@ const peerServer = ExpressPeerServer(server, {
 app.use("/peerjs", peerServer);
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || CLIENT_URL,
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // Serve static files from uploads directory
